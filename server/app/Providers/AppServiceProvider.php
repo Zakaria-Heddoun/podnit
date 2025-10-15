@@ -12,7 +12,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Force cache and session to use filesystem to avoid missing DB tables
+        if (config('cache.default') !== 'file') {
+            config(['cache.default' => 'file']);
+        }
+        if (config('session.driver') !== 'file') {
+            config(['session.driver' => 'file']);
+        }
     }
 
     /**
