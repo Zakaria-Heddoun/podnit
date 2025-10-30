@@ -276,26 +276,21 @@ const AdminSidebar: React.FC = () => {
       >
         <Link href="/admin">
           {isExpanded || isHovered || isMobileOpen ? (
-            <>
+            <div className="flex items-center space-x-2">
               <Image
-                className="dark:hidden"
-                src="/images/logo/logo.svg"
-                alt="Logo"
-                width={150}
-                height={40}
+                src="/images/podnitlogo.png"
+                alt="Podnit Logo"
+                width={32}
+                height={32}
               />
-              <Image
-                className="hidden dark:block"
-                src="/images/logo/logo-dark.svg"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-            </>
+              <span className="text-xl font-bold text-gray-900 dark:text-white">
+                Podnit
+              </span>
+            </div>
           ) : (
             <Image
-              src="/images/logo/logo-icon.svg"
-              alt="Logo"
+              src="/images/podnitlogo.png"
+              alt="Podnit Logo"
               width={32}
               height={32}
             />

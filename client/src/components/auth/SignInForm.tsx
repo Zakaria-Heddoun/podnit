@@ -135,14 +135,14 @@ export default function SignInForm() {
                   </div>
                   <Link
                     href="/reset-password"
-                    className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400"
+                    className="text-sm text-gray-800 hover:text-black dark:text-white dark:hover:text-gray-200"
                   >
                     Forgot password?
                   </Link>
                 </div>
                 <div>
                   <Button 
-                    className="w-full" 
+                    className="w-full bg-gray-800 hover:bg-black dark:bg-white dark:text-gray-800 dark:hover:bg-gray-200" 
                     size="sm" 
                     type="submit"
                     disabled={loading}
@@ -158,7 +158,7 @@ export default function SignInForm() {
                 Don&apos;t have an account? {""}
                 <Link
                   href="/signup"
-                  className="text-brand-500 hover:text-brand-600 dark:text-brand-400"
+                  className="text-gray-800 hover:text-black dark:text-white dark:hover:text-gray-200"
                 >
                   Sign Up
                 </Link>

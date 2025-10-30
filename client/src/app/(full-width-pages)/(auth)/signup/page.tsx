@@ -3,8 +3,8 @@ import AuthRedirect from "./AuthRedirect";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Next.js SignUp Page | TailAdmin - Next.js Dashboard Template",
-  description: "This is Next.js SignUp Page TailAdmin Dashboard Template",
+  title: "Sign Up | Podnit - Creative Design Platform",
+  description: "Create your Podnit account to start designing and selling custom products",
   // other metadata
 };
 

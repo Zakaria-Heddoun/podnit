@@ -66,7 +66,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
     }
   };
 
-  const isTextElement = selectedElement.type === 'text';
+  const isTextElement = selectedElement?.type === 'textbox' || selectedElement?.type === 'text';
 
   return (
     <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-30 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2">

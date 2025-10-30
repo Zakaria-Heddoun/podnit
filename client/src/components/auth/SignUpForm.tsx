@@ -14,6 +14,8 @@ export default function SignUpForm() {
     first_name: '',
     last_name: '',
     email: '',
+    phone: '',
+    brand_name: '',
     password: ''
   });
   const [error, setError] = useState('');
@@ -40,7 +42,7 @@ export default function SignUpForm() {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/register', {
+      const response = await fetch('http://127.0.0.1:8000/api/signup', {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -53,13 +55,12 @@ export default function SignUpForm() {
         }),
       });
 
-      const data = await response.json();
-
       if (response.ok) {
         // Registration successful, redirect to signin
         router.push('/signin?message=Registration successful! Please sign in.');
       } else {
         // Handle validation errors
+        const data = await response.json();
         if (data.errors) {
           const errorMessages = Object.values(data.errors).flat();
           setError(errorMessages.join(', '));
@@ -135,6 +136,36 @@ export default function SignUpForm() {
                     />
                   </div>
                 </div>
+                {/* <!-- Phone Number --> */}
+                <div>
+                  <Label>
+                    Phone Number<span className="text-error-500">*</span>
+                  </Label>
+                  <Input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    placeholder="Enter your phone number"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                {/* <!-- Brand Name --> */}
+                <div>
+                  <Label>
+                    Brand Name<span className="text-error-500">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    id="brand_name"
+                    name="brand_name"
+                    placeholder="Enter your brand name"
+                    value={formData.brand_name}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
                 {/* <!-- Email --> */}
                 <div>
                   <Label>
@@ -199,7 +230,7 @@ export default function SignUpForm() {
                   <button 
                     type="submit"
                     disabled={loading}
-                    className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium text-white transition rounded-lg bg-brand-500 shadow-theme-xs hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium text-white transition rounded-lg bg-gray-800 shadow-theme-xs hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed dark:bg-white dark:text-gray-800 dark:hover:bg-gray-200"
                   >
                     {loading ? 'Creating Account...' : 'Sign Up'}
                   </button>
@@ -212,7 +243,7 @@ export default function SignUpForm() {
                 Already have an account?{" "}
                 <Link
                   href="/signin"
-                  className="text-brand-500 hover:text-brand-600 dark:text-brand-400"
+                  className="text-gray-800 hover:text-black dark:text-white dark:hover:text-gray-200"
                 >
                   Sign In
                 </Link>

@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import * as fabric from 'fabric';
 import TShirtMockup from './components/TShirtMockup';
-import ExportActions from './components/ExportActions';
 import FloatingToolbar from './components/FloatingToolbar';
 
 const DesignCanvas = () => {
@@ -220,14 +219,16 @@ const DesignCanvas = () => {
     if (!canvasRef?.current) return;
 
     const canvas = canvasRef?.current;
-    const text = new fabric.FabricText('New Text', {
-      left: 150,
-      top: 200,
+    const text = new fabric.Textbox('PODTEXT', {
+      left: 50,
+      top: 50,
       fontFamily: 'Arial',
       fontSize: 24,
-      fill: '#000000',
+      fill: '#FFFFFF',
       selectable: true,
-      editable: true
+      editable: true,
+      width: 140,
+      splitByGrapheme: false
     });
     canvas?.add(text);
     canvas?.setActiveObject(text);
@@ -356,6 +357,44 @@ const DesignCanvas = () => {
               className="hidden"
             />
           </label>
+
+          {/* Export Actions */}
+          <div className="flex flex-col items-center space-y-2 mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <span className="text-xs text-gray-600 dark:text-gray-400">Export</span>
+            <div className="flex flex-col space-y-1">
+              <button
+                onClick={() => {
+                  if (canvasRef?.current) {
+                    const dataURL = canvasRef.current.toDataURL('image/png');
+                    handleExportArea(dataURL, currentArea);
+                  }
+                }}
+                className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                title={`Export ${currentArea.charAt(0).toUpperCase() + currentArea.slice(1)}`}
+              >
+                <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => {
+                  const designs = {
+                    front: canvasRef?.current?.toDataURL('image/png'),
+                    back: null,
+                    leftSleeve: null,
+                    rightSleeve: null
+                  };
+                  handleExportAll(designs);
+                }}
+                className="p-2 rounded-lg bg-green-100 dark:bg-green-900 hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
+                title="Export All Areas"
+              >
+                <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Center Canvas Area */}
@@ -405,16 +444,7 @@ const DesignCanvas = () => {
             }
           }}
         />
-        )}
       </div>
-
-      {/* Export Actions - Bottom Bar */}
-      <ExportActions
-        canvas={canvasRef?.current}
-        currentArea={currentArea}
-        onExportArea={handleExportArea}
-        onExportAll={handleExportAll}
-      />
     </div>
   );
 };
