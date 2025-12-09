@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -21,9 +23,111 @@ class UserController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
+                'phone' => $user->phone,
+                'brand_name' => $user->brand_name,
+                'cin' => $user->cin,
+                'bank_name' => $user->bank_name,
+                'rib' => $user->rib,
+                'balance' => $user->balance,
+                'points' => $user->points,
+                'referral_code' => $user->referral_code,
+                'referred_by_id' => $user->referred_by_id,
+                'is_verified' => $user->is_verified,
                 'created_at' => $user->created_at,
                 'updated_at' => $user->updated_at,
             ]
+        ]);
+    }
+
+    /**
+     * Update user profile
+     */
+    public function update(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+
+        // Base validation rules
+        $rules = [
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:20',
+        ];
+
+        // Add seller-specific validation rules
+        if ($user->role === 'seller') {
+            $rules = array_merge($rules, [
+                'brand_name' => 'nullable|string|max:255',
+                'cin' => 'nullable|string|max:20',
+                'bank_name' => 'nullable|string|max:100',
+                'rib' => 'nullable|string|max:30',
+            ]);
+        }
+
+        $request->validate($rules);
+
+        // Fields allowed for all users
+        $allowedFields = ['name', 'email', 'phone'];
+
+        // Add seller-specific fields
+        if ($user->role === 'seller') {
+            $allowedFields = array_merge($allowedFields, [
+                'brand_name', 'cin', 'bank_name', 'rib'
+            ]);
+        }
+
+        // Handle avatar upload
+        if ($request->hasFile('avatar')) {
+            $request->validate([
+                'avatar' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048'
+            ]);
+
+            // Delete old avatar if exists
+            if ($user->avatar && file_exists(public_path(ltrim($user->avatar, '/')))) {
+                unlink(public_path(ltrim($user->avatar, '/')));
+            }
+
+            $file = $request->file('avatar');
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $file->move(public_path('images/user'), $filename);
+
+            // Update avatar directly
+            $user->avatar = '/images/user/' . $filename;
+            $user->save();
+        }
+
+        $user->update($request->only($allowedFields));
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'data' => $user->fresh()
+        ]);
+    }
+
+    /**
+     * Update user password
+     */
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = auth()->user();
+
+        // Check if current password is correct
+        if (!Hash::check($request->current_password, $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['The current password is incorrect.'],
+            ]);
+        }
+
+        $user->update([
+            'password' => Hash::make($request->password)
+        ]);
+
+        return response()->json([
+            'message' => 'Password updated successfully'
         ]);
     }
 

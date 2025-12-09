@@ -1,160 +1,436 @@
 "use client";
 
-import React from "react";
-import Image from "next/image";
-import { sampleOrders } from "@/data/sampleData";
-import { Order } from "@/types/datatable";
+import React, { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import Badge from '@/components/ui/badge/Badge';
+import { useAuth } from '@/context/AuthContext';
 
-type Params = { id: string };
-
-const statusStyles: Record<Order["status"], string> = {
-  Completed: "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100",
-  Processing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100",
-  Cancelled: "bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100",
-  Refunded: "bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100",
-};
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(amount);
+interface OrderDetail {
+  id: number;
+  order_number: string;
+  customer: {
+    id: number;
+    name: string;
+    email: string;
+    phone: string;
+  };
+  product: {
+    id: number;
+    name: string;
+    category: string;
+  };
+  template?: {
+    id: number;
+    title: string;
+  };
+  quantity: number;
+  unit_price: number;
+  selling_price?: number;
+  total_amount: number;
+  status: string;
+  customization: {
+    color: string;
+    size: string;
+    notes?: string;
+  };
+  shipping_address: {
+    street: string;
+    city: string;
+    postal_code: string;
+    country: string;
+  };
+  status_history?: Array<{
+    id: number;
+    old_status: string | null;
+    new_status: string;
+    notes?: string;
+    created_at: string;
+    updated_by?: {
+      name: string;
+    };
+  }>;
+  created_at: string;
+  updated_at: string;
 }
 
-function buildStatusTimeline(order: Order) {
-  const steps: { label: string; date?: string; done: boolean }[] = [
-    { label: "Placed", date: order.date, done: true },
-  ];
+export default function OrderDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { user } = useAuth();
+  const orderId = params.id as string;
+  
+  const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
 
-  if (order.status === "Processing") {
-    steps.push({ label: "Processing", done: true });
-  }
-  if (order.status === "Completed") {
-    steps.push({ label: "Processing", done: true });
-    steps.push({ label: "Completed", done: true });
-  }
-  if (order.status === "Cancelled") {
-    steps.push({ label: "Cancelled", done: true });
-  }
-  if (order.status === "Refunded") {
-    steps.push({ label: "Completed", done: true });
-    steps.push({ label: "Refunded", done: true });
-  }
+  // Fetch order details from API
+  useEffect(() => {
+    const fetchOrderDetails = async () => {
+      // Check authentication first
+      if (!user) {
+        router.push('/signin');
+        return;
+      }
 
-  return steps;
-}
+      setLoading(true);
+      
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const token = localStorage.getItem('token');
+        
+        const response = await fetch(`${API_URL}/api/seller/orders/${orderId}`, {
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Order Detail API Response:', result); // Debug log
+          if (result.data) {
+            setOrder(result.data);
+            setLoading(false);
+            return;
+          } else {
+            console.error('No data in API response');
+            setLoading(false);
+            return;
+          }
+        } else if (response.status === 404) {
+          // Order not found or doesn't belong to this seller
+          router.push('/seller/orders');
+          return;
+        } else {
+          // Log other HTTP errors
+          const errorText = await response.text();
+          console.error('API Error:', response.status, errorText);
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching order details:', error);
+        setLoading(false);
+        return;
+      }
+      
+      // If we get here, there was an error with the API
+      setLoading(false);
+    };    if (orderId && user) {
+      fetchOrderDetails();
+    }
+  }, [orderId, user, router]);
 
-export default function SellerOrderDetails({ params }: { params: Params }) {
-  const id = Number(params.id);
-  const order = sampleOrders.find((o) => o.id === id);
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!order) return;
 
-  if (!order) {
+    setUpdating(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${API_URL}/api/seller/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          notes: `Status updated to ${newStatus}`
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setOrder(result.data);
+        alert(`Order status updated to ${newStatus}`);
+      } else {
+        throw new Error('Failed to update status');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update order status');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'PENDING': return 'warning';
+      case 'IN_PROGRESS': return 'info';
+      case 'PRINTED': return 'info';
+      case 'DELIVERING': return 'info';
+      case 'SHIPPED': return 'success';
+      case 'PAID': return 'success';
+      case 'CANCELLED': return 'error';
+      case 'RETURNED': return 'error';
+      default: return 'light';
+    }
+  };
+
+  const getNextStatus = (currentStatus: string) => {
+    const statusFlow: Record<string, string[]> = {
+      'PENDING': ['IN_PROGRESS', 'CANCELLED'],
+      'IN_PROGRESS': ['PRINTED', 'CANCELLED'],
+      'PRINTED': ['DELIVERING'],
+      'DELIVERING': ['SHIPPED'],
+      'SHIPPED': ['PAID'],
+      'PAID': [],
+      'CANCELLED': [],
+      'RETURNED': []
+    };
+    
+    return statusFlow[currentStatus] || [];
+  };
+
+  if (loading) {
     return (
-      <div className="mx-auto max-w-screen-lg p-4 md:p-6 2xl:p-10">
-        <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
-          <h2 className="text-title-md font-semibold text-black dark:text-white">Order Not Found</h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            The requested order does not exist. Please check the URL or return to orders.
-          </p>
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
-  const timeline = buildStatusTimeline(order);
+  if (!order) {
+    return (
+      <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+        <h2 className="text-xl font-semibold text-black dark:text-white mb-4">Order Not Found</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          The order you're looking for could not be found or there was an error loading the data.
+        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+          Please check the browser console for error details.
+        </p>
+        <Button onClick={() => router.back()} variant="outline">
+          Go Back
+        </Button>
+      </div>
+    );
+  }
+
+  const nextStatuses = getNextStatus(order.status);
 
   return (
-    <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+    <div className="mx-auto max-w-4xl space-y-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-title-md2 font-semibold text-black dark:text-white">
-            Order {order.orderNumber}
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-300">Date: {order.date}</p>
+      <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-black dark:text-white">
+              Order Details
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              {order.order_number}
+            </p>
+          </div>
+          <Badge size="md" color={getStatusColor(order.status)}>
+            {order.status}
+          </Badge>
         </div>
-        <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${statusStyles[order.status]}`}>
-          {order.status}
-        </span>
+        
+        {/* Quick Actions */}
+        {nextStatuses.length > 0 && (
+          <div className="flex gap-3 mt-4">
+            <span className="text-sm text-gray-600 dark:text-gray-400">Update Status:</span>
+            {nextStatuses.map(status => (
+              <Button
+                key={status}
+                size="sm"
+                onClick={() => handleStatusUpdate(status)}
+                disabled={updating}
+                className="bg-primary hover:bg-primary/90"
+              >
+                {updating ? 'Updating...' : `Mark as ${status.replace('_', ' ')}`}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Top summary cards */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-sm border border-stroke bg-white p-5 shadow-default dark:border-strokedark dark:bg-boxdark">
-          <div className="flex items-center gap-3">
-            {order.customer.avatar && (
-              <Image src={order.customer.avatar} alt={order.customer.name} width={40} height={40} className="rounded-full" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Order Information */}
+        <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+          <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Order Information</h3>
+          
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-600 dark:text-gray-400">Order Number:</span>
+              <span className="font-medium text-black dark:text-white">{order.order_number}</span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600 dark:text-gray-400">Product:</span>
+              <span className="font-medium text-black dark:text-white">{order.product.name}</span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600 dark:text-gray-400">Category:</span>
+              <span className="font-medium text-black dark:text-white">{order.product.category}</span>
+            </div>
+            
+            {order.template && (
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Template:</span>
+                <span className="font-medium text-black dark:text-white">{order.template.title}</span>
+              </div>
             )}
-            <div>
-              <p className="text-sm font-medium text-black dark:text-white">{order.customer.name}</p>
-              <p className="text-xs text-gray-600 dark:text-gray-300">{order.customer.email}</p>
-            </div>
-          </div>
-          <p className="mt-4 text-xs font-medium text-gray-500 dark:text-gray-400">Shipping Address</p>
-          <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">Not provided</p>
-        </div>
-
-        <div className="rounded-sm border border-stroke bg-white p-5 shadow-default dark:border-strokedark dark:bg-boxdark">
-          <p className="text-sm font-medium text-black dark:text-white">Payment</p>
-          <div className="mt-2 space-y-1 text-sm">
+            
             <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-300">Method</span>
-              <span className="text-black dark:text-white">{order.paymentMethod ?? "N/A"}</span>
+              <span className="text-gray-600 dark:text-gray-400">Quantity:</span>
+              <span className="font-medium text-black dark:text-white">{order.quantity}</span>
             </div>
+            
             <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-300">Total</span>
-              <span className="text-black dark:text-white">{formatCurrency(order.amount)}</span>
+              <span className="text-gray-600 dark:text-gray-400">Base Cost per Unit:</span>
+              <span className="font-medium text-black dark:text-white">{Number(order.unit_price).toFixed(2)} DH</span>
             </div>
-          </div>
-        </div>
-
-        <div className="rounded-sm border border-stroke bg-white p-5 shadow-default dark:border-strokedark dark:bg-boxdark">
-          <p className="text-sm font-medium text-black dark:text-white">Template</p>
-          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">Not provided</p>
-        </div>
-      </div>
-
-      {/* Products */}
-      <div className="mb-6 rounded-sm border border-stroke bg-white p-5 shadow-default dark:border-strokedark dark:bg-boxdark">
-        <p className="mb-4 text-sm font-medium text-black dark:text-white">Products</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-md border border-gray-100 p-4 dark:border-gray-800">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-black dark:text-white">{order.product}</p>
-              <span className="text-xs text-gray-600 dark:text-gray-300">Qty: 1</span>
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            
+            {order.selling_price && (
               <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-300">Size</span>
-                <span className="text-black dark:text-white">N/A</span>
+                <span className="text-gray-600 dark:text-gray-400">Selling Price per Unit:</span>
+                <span className="font-medium text-blue-600">{Number(order.selling_price).toFixed(2)} DH</span>
               </div>
+            )}
+            
+            {order.selling_price && (
               <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-300">Price</span>
-                <span className="text-black dark:text-white">{formatCurrency(order.amount)}</span>
+                <span className="text-gray-600 dark:text-gray-400">Profit per Unit:</span>
+                <span className="font-medium text-green-600">
+                  +{(Number(order.selling_price) - Number(order.unit_price)).toFixed(2)} DH
+                </span>
               </div>
+            )}
+            
+            <div className="flex justify-between border-t pt-3">
+              <span className="text-lg font-semibold text-black dark:text-white">Total:</span>
+              <span className="text-lg font-bold text-blue-600">{Number(order.total_amount).toFixed(2)} DH</span>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Order History */}
-      <div className="rounded-sm border border-stroke bg-white p-5 shadow-default dark:border-strokedark dark:bg-boxdark">
-        <p className="mb-4 text-sm font-medium text-black dark:text-white">Order History</p>
-        <div className="space-y-3">
-          {timeline.map((step, idx) => (
-            <div key={idx} className="flex items-center gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white text-xs">
-                {idx + 1}
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600 dark:text-gray-400">Order Date:</span>
+              <span className="font-medium text-black dark:text-white">
+                {new Date(order.created_at).toLocaleDateString()}
               </span>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-black dark:text-white">{step.label}</p>
-                {step.date && (
-                  <p className="text-xs text-gray-600 dark:text-gray-300">{step.date}</p>
-                )}
-              </div>
-              {step.done && (
-                <span className="text-xs text-green-600 dark:text-green-400">Done</span>
-              )}
             </div>
-          ))}
+          </div>
         </div>
+
+        {/* Customer Information */}
+        <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+          <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Customer Information</h3>
+          
+          <div className="space-y-3">
+            <div>
+              <span className="text-gray-600 dark:text-gray-400 block">Name:</span>
+              <span className="font-medium text-black dark:text-white">{order.customer.name}</span>
+            </div>
+            
+            <div>
+              <span className="text-gray-600 dark:text-gray-400 block">Email:</span>
+              <span className="font-medium text-black dark:text-white">{order.customer.email}</span>
+            </div>
+            
+            <div>
+              <span className="text-gray-600 dark:text-gray-400 block">Phone:</span>
+              <span className="font-medium text-black dark:text-white">{order.customer.phone}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Product Customization */}
+        <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+          <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Product Customization</h3>
+          
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-600 dark:text-gray-400">Color:</span>
+              <span className="font-medium text-black dark:text-white">{order.customization.color}</span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600 dark:text-gray-400">Size:</span>
+              <span className="font-medium text-black dark:text-white">{order.customization.size}</span>
+            </div>
+            
+            {order.customization.notes && (
+              <div>
+                <span className="text-gray-600 dark:text-gray-400 block">Notes:</span>
+                <span className="font-medium text-black dark:text-white">{order.customization.notes}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Shipping Address */}
+        <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+          <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Shipping Address</h3>
+          
+          <div className="space-y-2">
+            <p className="text-black dark:text-white">{order.shipping_address.street}</p>
+            <p className="text-black dark:text-white">
+              {order.shipping_address.city}, {order.shipping_address.postal_code}
+            </p>
+            <p className="text-black dark:text-white">{order.shipping_address.country}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Status History */}
+      <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+        <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Status History</h3>
+        
+        <div className="space-y-4">
+          {order.status_history && order.status_history.length > 0 ? (
+            order.status_history.map((history) => (
+              <div key={history.id} className="flex items-start gap-4 pb-4 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                <div className="flex-shrink-0 w-3 h-3 bg-blue-500 rounded-full mt-1"></div>
+                <div className="flex-grow">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge size="sm" color={getStatusColor(history.new_status)}>
+                      {history.new_status}
+                    </Badge>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {new Date(history.created_at).toLocaleDateString()} at {new Date(history.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  {history.notes && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{history.notes}</p>
+                  )}
+                  {history.updated_by && (
+                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                      Updated by: {history.updated_by.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+              <p>No status history available</p>
+              <p className="text-sm mt-1">Current status: <Badge size="sm" color={getStatusColor(order.status)}>{order.status}</Badge></p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-4 justify-end">
+        <Button
+          variant="outline"
+          onClick={() => router.back()}
+        >
+          Back to Orders
+        </Button>
+        <Button
+          onClick={() => window.print()}
+          className="bg-gray-600 hover:bg-gray-700"
+        >
+          Print Order
+        </Button>
       </div>
     </div>
   );

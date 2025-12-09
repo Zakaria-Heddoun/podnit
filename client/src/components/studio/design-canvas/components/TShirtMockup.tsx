@@ -91,8 +91,9 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         const target = e.target;
         if (target && target.type === 'text') {
           canvas.setActiveObject(target);
-          target.enterEditing();
-          target.selectAll();
+          canvas.setActiveObject(target);
+          (target as any).enterEditing();
+          (target as any).selectAll();
         }
       });
 
@@ -112,44 +113,76 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
     };
   }, [onCanvasReady, onSelectionChange]);
 
+  // Update canvas dimensions and clip path when area changes
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const width = currentArea === 'small-front' ? 176 : 220;
+    const height = currentArea === 'small-front' ? 96 : 270;
+
+    canvas.setDimensions({ width, height });
+
+    const clipPath = new fabric.Rect({
+      left: 0,
+      top: 0,
+      width,
+      height,
+      absolutePositioned: true,
+      fill: 'transparent',
+      stroke: 'transparent',
+      selectable: false,
+      evented: false
+    });
+
+    canvas.clipPath = clipPath;
+    canvas.requestRenderAll();
+  }, [currentArea]);
+
   return (
     <div className={`flex items-center justify-center ${className}`}>
-      <div className="relative">
+      <div className="relative" style={{ width: '400px', height: '500px' }}>
         {/* T-Shirt Background Image */}
-        <div 
+        <div
           className="absolute inset-0 rounded-lg shadow-lg bg-center bg-no-repeat bg-contain"
-          style={{ 
+          style={{
             backgroundImage: `url('/images/tshirt-template.png')`,
             filter: `hue-rotate(${selectedColor === '#FFFFFF' ? '0deg' : selectedColor === '#000000' ? '180deg' : '0deg'})`,
-            width: '400px',
-            height: '500px'
           }}
         />
-        
+
         {/* Printable Area Outline */}
-        <div 
+        <div
           className="absolute border-2 border-dashed border-gray-400 rounded-md z-5"
           style={{
-            width: '220px',
-            height: '270px',
-            top: '140px',
-            left: '90px',
+            width: currentArea === 'small-front' ? '180px' : '220px',
+            height: currentArea === 'small-front' ? '100px' : '270px',
+            top: currentArea === 'small-front' ? '150px' : '140px',
+            left: currentArea === 'small-front' ? '110px' : '90px',
             pointerEvents: 'none',
             backgroundColor: 'transparent'
           }}
         />
-        
-        {/* Canvas */}
-        <canvas
-          ref={canvasRef}
+
+        {/* Canvas Wrapper */}
+        <div
           className="absolute z-10 rounded-lg"
-          style={{ 
-            backgroundColor: 'transparent',
-            top: '150px',
-            left: '80px'
+          style={{
+            top: currentArea === 'small-front' ? '152px' : '140px',
+            left: currentArea === 'small-front' ? '112px' : '90px',
+            width: currentArea === 'small-front' ? '176px' : '220px',
+            height: currentArea === 'small-front' ? '96px' : '270px',
           }}
-        />
-        
+        >
+          <canvas
+            ref={canvasRef}
+            className="w-full h-full"
+            style={{
+              backgroundColor: 'transparent',
+            }}
+          />
+        </div>
+
         {/* Area Indicator */}
         <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm z-20">
           {currentArea.charAt(0).toUpperCase() + currentArea.slice(1)}

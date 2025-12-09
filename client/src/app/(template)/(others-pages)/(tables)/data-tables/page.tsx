@@ -1,7 +1,7 @@
 "use client";
 
 import DataTablesLibrary from "@/components/DataTables/DataTablesLibrary";
-import DataTablesExport from "@/components/DataTables/DataTablesExport";
+import DataTablesExport, { DataTablesExportItem } from "@/components/DataTables/DataTablesExport";
 import DataTablesHTML from "@/components/DataTables/DataTablesHTML";
 
 // Sample data for basic DataTable
@@ -108,11 +108,7 @@ const basicTableData = [
   }
 ];
 
-// Sample data for advanced DataTable with actions
-const advancedTableData = basicTableData.slice(0, 5).map(item => ({
-  ...item,
-  status: "Active"
-}));
+
 
 // Sample data for export DataTable with departments
 const exportTableData = basicTableData.map(item => ({
@@ -122,23 +118,13 @@ const exportTableData = basicTableData.map(item => ({
 }));
 
 const DataTablesPage = () => {
-  const handleEdit = (item: any) => {
-    console.log('Edit item:', item);
-    alert(`Editing ${item.name}`);
-  };
 
-  const handleDelete = (item: any) => {
-    console.log('Delete item:', item);
-    if (confirm(`Are you sure you want to delete ${item.name}?`)) {
-      alert(`Deleted ${item.name}`);
-    }
-  };
 
-  const handleSelectionChange = (selectedItems: any[]) => {
+  const handleSelectionChange = (selectedItems: DataTablesExportItem[]) => {
     console.log('Selected items:', selectedItems);
   };
 
-  const handleBulkAction = (action: string, selectedItems: any[]) => {
+  const handleBulkAction = (action: string, selectedItems: DataTablesExportItem[]) => {
     console.log(`Bulk ${action} for:`, selectedItems);
     if (action === 'delete') {
       if (confirm(`Are you sure you want to delete ${selectedItems.length} items?`)) {
@@ -157,27 +143,25 @@ const DataTablesPage = () => {
           Advanced data tables with sorting, filtering, and pagination using DataTables library.
         </p>
       </div>
-      
+
       {/* HTML Structure DataTable - Exact replica */}
       <div className="mb-8">
         <DataTablesHTML />
       </div>
-      
+
       {/* Basic DataTable */}
       <div className="mb-8">
-        <DataTablesLibrary 
-          data={basicTableData} 
+        <DataTablesLibrary
+          data={basicTableData}
           title="Basic DataTable"
-          tableId="basicDataTable"
         />
       </div>
-      
+
       {/* Export DataTable with Selection */}
       <div className="mb-8">
-        <DataTablesExport 
-          data={exportTableData} 
+        <DataTablesExport
+          data={exportTableData}
           title="DataTable with Export & Selection"
-          tableId="exportDataTable"
           enableSelection={true}
           onSelectionChange={handleSelectionChange}
           onBulkAction={handleBulkAction}

@@ -179,12 +179,12 @@ export default function AdminConfiguration() {
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
-                      activeTab === tab.id
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${activeTab === tab.id
                         ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
                         : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.05]"
-                    }`}
+                      }`}
                   >
                     <span className="text-lg">{tab.icon}</span>
                     {tab.name}
@@ -198,7 +198,7 @@ export default function AdminConfiguration() {
         {/* Content Area */}
         <div className="col-span-12 xl:col-span-9">
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-6 py-6 dark:border-gray-800 dark:bg-white/[0.03]">
-            
+
             {/* General Settings */}
             {activeTab === "general" && (
               <div>
@@ -214,7 +214,7 @@ export default function AdminConfiguration() {
                       <input
                         type="text"
                         value={generalSettings.siteName}
-                        onChange={(e) => setGeneralSettings({...generalSettings, siteName: e.target.value})}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, siteName: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       />
                     </div>
@@ -225,12 +225,12 @@ export default function AdminConfiguration() {
                       <input
                         type="url"
                         value={generalSettings.siteUrl}
-                        onChange={(e) => setGeneralSettings({...generalSettings, siteUrl: e.target.value})}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, siteUrl: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       />
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Site Description
@@ -238,7 +238,7 @@ export default function AdminConfiguration() {
                     <textarea
                       rows={3}
                       value={generalSettings.siteDescription}
-                      onChange={(e) => setGeneralSettings({...generalSettings, siteDescription: e.target.value})}
+                      onChange={(e) => setGeneralSettings({ ...generalSettings, siteDescription: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                     />
                   </div>
@@ -250,7 +250,7 @@ export default function AdminConfiguration() {
                       </label>
                       <select
                         value={generalSettings.timezone}
-                        onChange={(e) => setGeneralSettings({...generalSettings, timezone: e.target.value})}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, timezone: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       >
                         <option value="UTC">UTC</option>
@@ -266,7 +266,7 @@ export default function AdminConfiguration() {
                       </label>
                       <select
                         value={generalSettings.language}
-                        onChange={(e) => setGeneralSettings({...generalSettings, language: e.target.value})}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, language: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       >
                         <option value="en">English</option>
@@ -281,7 +281,7 @@ export default function AdminConfiguration() {
                       </label>
                       <select
                         value={generalSettings.currency}
-                        onChange={(e) => setGeneralSettings({...generalSettings, currency: e.target.value})}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, currency: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       >
                         <option value="USD">USD</option>
@@ -301,7 +301,7 @@ export default function AdminConfiguration() {
                       <input
                         type="checkbox"
                         checked={generalSettings.maintenance}
-                        onChange={(e) => setGeneralSettings({...generalSettings, maintenance: e.target.checked})}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, maintenance: e.target.checked })}
                         className="sr-only peer"
                       />
                       <div className="relative h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:peer-focus:ring-blue-800"></div>
@@ -335,8 +335,8 @@ export default function AdminConfiguration() {
                           type="checkbox"
                           checked={paymentSettings.paypal.enabled}
                           onChange={(e) => setPaymentSettings({
-                            ...paymentSettings, 
-                            paypal: {...paymentSettings.paypal, enabled: e.target.checked}
+                            ...paymentSettings,
+                            paypal: { ...paymentSettings.paypal, enabled: e.target.checked }
                           })}
                           className="sr-only peer"
                         />
@@ -353,7 +353,7 @@ export default function AdminConfiguration() {
                             value={paymentSettings.paypal.mode}
                             onChange={(e) => setPaymentSettings({
                               ...paymentSettings,
-                              paypal: {...paymentSettings.paypal, mode: e.target.value as "sandbox" | "live"}
+                              paypal: { ...paymentSettings.paypal, mode: e.target.value as "sandbox" | "live" }
                             })}
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                           >
@@ -371,7 +371,7 @@ export default function AdminConfiguration() {
                               value={paymentSettings.paypal.clientId}
                               onChange={(e) => setPaymentSettings({
                                 ...paymentSettings,
-                                paypal: {...paymentSettings.paypal, clientId: e.target.value}
+                                paypal: { ...paymentSettings.paypal, clientId: e.target.value }
                               })}
                               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                             />
@@ -385,7 +385,7 @@ export default function AdminConfiguration() {
                               value={paymentSettings.paypal.clientSecret}
                               onChange={(e) => setPaymentSettings({
                                 ...paymentSettings,
-                                paypal: {...paymentSettings.paypal, clientSecret: e.target.value}
+                                paypal: { ...paymentSettings.paypal, clientSecret: e.target.value }
                               })}
                               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                             />
@@ -412,8 +412,8 @@ export default function AdminConfiguration() {
                           type="checkbox"
                           checked={paymentSettings.stripe.enabled}
                           onChange={(e) => setPaymentSettings({
-                            ...paymentSettings, 
-                            stripe: {...paymentSettings.stripe, enabled: e.target.checked}
+                            ...paymentSettings,
+                            stripe: { ...paymentSettings.stripe, enabled: e.target.checked }
                           })}
                           className="sr-only peer"
                         />
@@ -430,7 +430,7 @@ export default function AdminConfiguration() {
                             value={paymentSettings.stripe.mode}
                             onChange={(e) => setPaymentSettings({
                               ...paymentSettings,
-                              stripe: {...paymentSettings.stripe, mode: e.target.value as "test" | "live"}
+                              stripe: { ...paymentSettings.stripe, mode: e.target.value as "test" | "live" }
                             })}
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                           >
@@ -448,7 +448,7 @@ export default function AdminConfiguration() {
                               value={paymentSettings.stripe.publicKey}
                               onChange={(e) => setPaymentSettings({
                                 ...paymentSettings,
-                                stripe: {...paymentSettings.stripe, publicKey: e.target.value}
+                                stripe: { ...paymentSettings.stripe, publicKey: e.target.value }
                               })}
                               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                             />
@@ -462,7 +462,7 @@ export default function AdminConfiguration() {
                               value={paymentSettings.stripe.secretKey}
                               onChange={(e) => setPaymentSettings({
                                 ...paymentSettings,
-                                stripe: {...paymentSettings.stripe, secretKey: e.target.value}
+                                stripe: { ...paymentSettings.stripe, secretKey: e.target.value }
                               })}
                               className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                             />
@@ -489,8 +489,8 @@ export default function AdminConfiguration() {
                           type="checkbox"
                           checked={paymentSettings.bankTransfer.enabled}
                           onChange={(e) => setPaymentSettings({
-                            ...paymentSettings, 
-                            bankTransfer: {...paymentSettings.bankTransfer, enabled: e.target.checked}
+                            ...paymentSettings,
+                            bankTransfer: { ...paymentSettings.bankTransfer, enabled: e.target.checked }
                           })}
                           className="sr-only peer"
                         />
@@ -507,7 +507,7 @@ export default function AdminConfiguration() {
                           value={paymentSettings.bankTransfer.accountDetails}
                           onChange={(e) => setPaymentSettings({
                             ...paymentSettings,
-                            bankTransfer: {...paymentSettings.bankTransfer, accountDetails: e.target.value}
+                            bankTransfer: { ...paymentSettings.bankTransfer, accountDetails: e.target.value }
                           })}
                           placeholder="Enter your bank account details for customers..."
                           className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -534,7 +534,7 @@ export default function AdminConfiguration() {
                       <input
                         type="email"
                         value={emailSettings.fromEmail}
-                        onChange={(e) => setEmailSettings({...emailSettings, fromEmail: e.target.value})}
+                        onChange={(e) => setEmailSettings({ ...emailSettings, fromEmail: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       />
                     </div>
@@ -545,7 +545,7 @@ export default function AdminConfiguration() {
                       <input
                         type="text"
                         value={emailSettings.fromName}
-                        onChange={(e) => setEmailSettings({...emailSettings, fromName: e.target.value})}
+                        onChange={(e) => setEmailSettings({ ...emailSettings, fromName: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                       />
                     </div>
@@ -564,7 +564,7 @@ export default function AdminConfiguration() {
                             value={emailSettings.smtp.host}
                             onChange={(e) => setEmailSettings({
                               ...emailSettings,
-                              smtp: {...emailSettings.smtp, host: e.target.value}
+                              smtp: { ...emailSettings.smtp, host: e.target.value }
                             })}
                             placeholder="smtp.gmail.com"
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -579,7 +579,7 @@ export default function AdminConfiguration() {
                             value={emailSettings.smtp.port}
                             onChange={(e) => setEmailSettings({
                               ...emailSettings,
-                              smtp: {...emailSettings.smtp, port: parseInt(e.target.value)}
+                              smtp: { ...emailSettings.smtp, port: parseInt(e.target.value) }
                             })}
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                           />
@@ -595,7 +595,7 @@ export default function AdminConfiguration() {
                             value={emailSettings.smtp.username}
                             onChange={(e) => setEmailSettings({
                               ...emailSettings,
-                              smtp: {...emailSettings.smtp, username: e.target.value}
+                              smtp: { ...emailSettings.smtp, username: e.target.value }
                             })}
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                           />
@@ -609,7 +609,7 @@ export default function AdminConfiguration() {
                             value={emailSettings.smtp.password}
                             onChange={(e) => setEmailSettings({
                               ...emailSettings,
-                              smtp: {...emailSettings.smtp, password: e.target.value}
+                              smtp: { ...emailSettings.smtp, password: e.target.value }
                             })}
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                           />
@@ -623,7 +623,7 @@ export default function AdminConfiguration() {
                           value={emailSettings.smtp.encryption}
                           onChange={(e) => setEmailSettings({
                             ...emailSettings,
-                            smtp: {...emailSettings.smtp, encryption: e.target.value as "tls" | "ssl" | "none"}
+                            smtp: { ...emailSettings.smtp, encryption: e.target.value as "tls" | "ssl" | "none" }
                           })}
                           className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         >
@@ -654,7 +654,7 @@ export default function AdminConfiguration() {
                               checked={enabled}
                               onChange={(e) => setEmailSettings({
                                 ...emailSettings,
-                                templates: {...emailSettings.templates, [key]: e.target.checked}
+                                templates: { ...emailSettings.templates, [key]: e.target.checked }
                               })}
                               className="sr-only peer"
                             />
@@ -688,7 +688,7 @@ export default function AdminConfiguration() {
                             <input
                               type="checkbox"
                               checked={securitySettings.twoFactorAuth}
-                              onChange={(e) => setSecuritySettings({...securitySettings, twoFactorAuth: e.target.checked})}
+                              onChange={(e) => setSecuritySettings({ ...securitySettings, twoFactorAuth: e.target.checked })}
                               className="sr-only peer"
                             />
                             <div className="relative h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:peer-focus:ring-blue-800"></div>
@@ -701,7 +701,7 @@ export default function AdminConfiguration() {
                           <input
                             type="number"
                             value={securitySettings.loginAttempts}
-                            onChange={(e) => setSecuritySettings({...securitySettings, loginAttempts: parseInt(e.target.value)})}
+                            onChange={(e) => setSecuritySettings({ ...securitySettings, loginAttempts: parseInt(e.target.value) })}
                             min="1"
                             max="10"
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -714,7 +714,7 @@ export default function AdminConfiguration() {
                           <input
                             type="number"
                             value={securitySettings.sessionTimeout}
-                            onChange={(e) => setSecuritySettings({...securitySettings, sessionTimeout: parseInt(e.target.value)})}
+                            onChange={(e) => setSecuritySettings({ ...securitySettings, sessionTimeout: parseInt(e.target.value) })}
                             min="5"
                             max="480"
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -722,7 +722,7 @@ export default function AdminConfiguration() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="rounded-lg border border-gray-200 p-6 dark:border-gray-700">
                       <h4 className="text-lg font-medium text-gray-800 dark:text-white mb-4">Password Policy</h4>
                       <div className="space-y-4">
@@ -733,7 +733,7 @@ export default function AdminConfiguration() {
                           <input
                             type="number"
                             value={securitySettings.passwordMinLength}
-                            onChange={(e) => setSecuritySettings({...securitySettings, passwordMinLength: parseInt(e.target.value)})}
+                            onChange={(e) => setSecuritySettings({ ...securitySettings, passwordMinLength: parseInt(e.target.value) })}
                             min="6"
                             max="32"
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
@@ -748,7 +748,7 @@ export default function AdminConfiguration() {
                             <input
                               type="checkbox"
                               checked={securitySettings.requireSpecialChars}
-                              onChange={(e) => setSecuritySettings({...securitySettings, requireSpecialChars: e.target.checked})}
+                              onChange={(e) => setSecuritySettings({ ...securitySettings, requireSpecialChars: e.target.checked })}
                               className="sr-only peer"
                             />
                             <div className="relative h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:peer-focus:ring-blue-800"></div>
@@ -763,7 +763,7 @@ export default function AdminConfiguration() {
                             <input
                               type="checkbox"
                               checked={securitySettings.sslEnforced}
-                              onChange={(e) => setSecuritySettings({...securitySettings, sslEnforced: e.target.checked})}
+                              onChange={(e) => setSecuritySettings({ ...securitySettings, sslEnforced: e.target.checked })}
                               className="sr-only peer"
                             />
                             <div className="relative h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:peer-focus:ring-blue-800"></div>

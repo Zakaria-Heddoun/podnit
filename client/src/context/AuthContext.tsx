@@ -9,6 +9,19 @@ interface User {
   role: 'admin' | 'seller';
   created_at: string;
   updated_at: string;
+  // Basic user fields
+  phone?: string;
+  brand_name?: string;
+  // Seller-specific fields
+  cin?: string;
+  bank_name?: string;
+  rib?: string;
+  balance?: number;
+  points?: number;
+  referral_code?: string;
+  referred_by_id?: number;
+  is_verified?: boolean;
+  avatar?: string;
 }
 
 interface AuthContextType {
@@ -16,6 +29,7 @@ interface AuthContextType {
   token: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; redirect_url?: string }>;
   logout: () => void;
+  fetchUserData: () => Promise<void>;
   loading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -25,6 +39,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_BASE_URL = '/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -39,22 +54,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  // Fetch fresh user data from the database
+  const fetchUserData = async () => {
+    const currentToken = token || localStorage.getItem('token');
+    if (!currentToken) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/user`, {
+        headers: {
+          'Authorization': `Bearer ${currentToken}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data) {
+          setUser(result.data);
+          localStorage.setItem('user', JSON.stringify(result.data));
+        }
+      } else if (response.status === 401) {
+        // Token is invalid, clear auth state
+        clearAuthState();
+      }
+    } catch (error) {
+      console.error('Failed to fetch user data:', error);
+    }
+  };
+
   // Check authentication status on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    
+
     if (storedToken && storedUser) {
       try {
         const userData = JSON.parse(storedUser);
         setToken(storedToken);
         setUser(userData);
+        // Fetch fresh data from database after initial load
+        setTimeout(() => fetchUserData(), 100);
       } catch (error) {
         console.error('Failed to parse stored user data:', error);
         clearAuthState();
       }
     }
-    
+
     setLoading(false);
   }, []);
 
@@ -73,27 +121,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         const { token: authToken, user: userData, redirect_url } = data;
-        
+
         // Store auth data in localStorage
         localStorage.setItem('token', authToken);
         localStorage.setItem('user', JSON.stringify(userData));
-        
+
         setToken(authToken);
         setUser(userData);
 
         return { success: true, redirect_url };
       } else {
-        return { 
-          success: false, 
-          error: data.message || data.email?.[0] || 'Login failed. Please check your credentials.' 
+        return {
+          success: false,
+          error: data.message || data.email?.[0] || 'Login failed. Please check your credentials.'
         };
       }
     } catch (error) {
       console.error('Login error:', error);
-      
-      return { 
-        success: false, 
-        error: 'Network error. Please try again.' 
+
+      return {
+        success: false,
+        error: 'Network error. Please try again.'
       };
     }
   };
@@ -114,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     token,
     login,
     logout,
+    fetchUserData,
     loading,
     isAuthenticated,
     isAdmin,

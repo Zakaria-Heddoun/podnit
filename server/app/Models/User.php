@@ -25,6 +25,16 @@ class User extends Authenticatable
         'role',
         'brand_name',
         'phone',
+        'cin',
+        'bank_name',
+        'rib',
+        'balance',
+        'points',
+        'referral_code',
+        'referred_by_id',
+        'is_verified',
+        'is_active',
+        'avatar',
     ];
 
     /**
@@ -47,22 +57,42 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'balance' => 'decimal:2',
+            'is_verified' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 
-    /**
-     * Check if user is admin
-     */
+    // Seller relationships
+    public function referredBy()
+    {
+        return $this->belongsTo(User::class, 'referred_by_id');
+    }
+
+    public function referrals()
+    {
+        return $this->hasMany(User::class, 'referred_by_id');
+    }
+
+    // Orders relationship (for sellers)
+    public function sellerOrders()
+    {
+        return $this->hasMany(Order::class, 'seller_id');
+    }
+
+    // Helper methods
+    public function isSeller(): bool
+    {
+        return $this->role === 'seller';
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
     }
 
-    /**
-     * Check if user is seller
-     */
-    public function isSeller(): bool
+    public function templates()
     {
-        return $this->role === 'seller';
+        return $this->hasMany(Template::class);
     }
 }

@@ -31,6 +31,19 @@ class AuthenticatedSessionController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
+                'phone' => $user->phone,
+                'brand_name' => $user->brand_name,
+                // Seller fields
+                'cin' => $user->cin,
+                'bank_name' => $user->bank_name,
+                'rib' => $user->rib,
+                'balance' => $user->balance,
+                'points' => $user->points,
+                'referral_code' => $user->referral_code,
+                'referred_by_id' => $user->referred_by_id,
+                'is_verified' => $user->is_verified,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
             ],
             'redirect_url' => $user->isAdmin() ? '/admin/dashboard' : '/seller/dashboard'
         ]);

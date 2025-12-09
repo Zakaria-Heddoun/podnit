@@ -4,6 +4,7 @@ import NotificationDropdown from "@/components/header/NotificationDropdown";
 import UserDropdown from "@/components/header/UserDropdown";
 import WalletDisplay from "@/components/header/WalletDisplay";
 import { useSidebar } from "@/context/SidebarContext";
+import { useAuth } from "@/context/AuthContext";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -13,6 +14,7 @@ const AppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
   const pathname = usePathname();
   const isSellerPage = pathname?.startsWith('/seller');
+  const { user, isAuthenticated } = useAuth();
 
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
 
@@ -167,7 +169,10 @@ const AppHeader: React.FC = () => {
           {/* Left side - Theme toggle and notifications for non-seller pages, Wallet for seller pages */}
           <div className="flex items-center gap-2 2xsm:gap-3">
             {isSellerPage ? (
-              <WalletDisplay balance={2450.75} />
+              <WalletDisplay 
+                balance={user?.balance || 0} 
+                points={user?.points || 0} 
+              />
             ) : (
               <>
                 <ThemeToggleButton />

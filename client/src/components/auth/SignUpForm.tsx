@@ -16,7 +16,8 @@ export default function SignUpForm() {
     email: '',
     phone: '',
     brand_name: '',
-    password: ''
+    password: '',
+    referred_by_code: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -164,6 +165,20 @@ export default function SignUpForm() {
                     value={formData.brand_name}
                     onChange={handleInputChange}
                     required
+                  />
+                </div>
+                {/* <!-- Referral Code --> */}
+                <div>
+                  <Label>
+                    Referral Code (Optional)
+                  </Label>
+                  <Input
+                    type="text"
+                    id="referred_by_code"
+                    name="referred_by_code"
+                    placeholder="Enter referral code if you have one"
+                    value={formData.referred_by_code}
+                    onChange={handleInputChange}
                   />
                 </div>
                 {/* <!-- Email --> */}

@@ -5,48 +5,150 @@ import * as fabric from 'fabric';
 import TShirtMockup from './components/TShirtMockup';
 import FloatingToolbar from './components/FloatingToolbar';
 
-const DesignCanvas = () => {
-  const [currentArea, setCurrentArea] = useState('front');
+// ... existing imports ...
+
+export interface DesignCanvasRef {
+  getDesignData: () => Promise<{
+    designConfig: any;
+    images: {
+      'big-front': string | null;
+      'small-front': string | null;
+      back: string | null;
+      left: string | null;
+      right: string | null;
+    };
+  }>;
+  loadDesignData: (designConfig: any) => void;
+}
+
+interface DesignCanvasProps {
+  readOnly?: boolean;
+}
+
+const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ readOnly = false }, ref) => {
+  const [currentArea, setCurrentArea] = useState('big-front');
   const [selectedColor, setSelectedColor] = useState('#FFFFFF');
   const [selectedElement, setSelectedElement] = useState<any>(null);
-  
+
   // Separate canvas states for each side
-  const [canvasStates, setCanvasStates] = useState<{[key: string]: string}>({
-    front: '',
+  const [canvasStates, setCanvasStates] = useState<{ [key: string]: string }>({
+    'big-front': '',
+    'small-front': '',
     back: '',
     left: '',
     right: ''
   });
-  
+
   // Separate history for each side
-  const [canvasHistories, setCanvasHistories] = useState<{[key: string]: string[]}>({
-    front: [],
+  const [canvasHistories, setCanvasHistories] = useState<{ [key: string]: string[] }>({
+    'big-front': [],
+    'small-front': [],
     back: [],
     left: [],
     right: []
   });
-  
-  const [historyIndices, setHistoryIndices] = useState<{[key: string]: number}>({
-    front: -1,
+
+  const [historyIndices, setHistoryIndices] = useState<{ [key: string]: number }>({
+    'big-front': -1,
+    'small-front': -1,
     back: -1,
     left: -1,
     right: -1
   });
-  
+
   const canvasRef = useRef<any>(null);
+
+  React.useImperativeHandle(ref, () => ({
+    getDesignData: async () => {
+      // Save current canvas state first
+      if (canvasRef.current) {
+        const currentJson = JSON.stringify(canvasRef.current.toJSON());
+        const updatedStates = {
+          ...canvasStates,
+          [currentArea]: currentJson
+        };
+        setCanvasStates(updatedStates);
+
+        // Use PNG with multiplier 1 for high quality (same as export button)
+        const exportOptions = { format: 'png', multiplier: 1 };
+
+        // Simply export the CURRENT canvas - this is what the user is seeing
+        const currentImage = canvasRef.current.toDataURL(exportOptions);
+
+        // Map the current area to the correct image field
+        const images = {
+          'big-front': currentArea === 'big-front' ? currentImage : null,
+          'small-front': currentArea === 'small-front' ? currentImage : null,
+          back: currentArea === 'back' ? currentImage : null,
+          left: currentArea === 'left' ? currentImage : null,
+          right: currentArea === 'right' ? currentImage : null,
+        };
+
+        return {
+          designConfig: {
+            states: updatedStates,
+            color: selectedColor,
+          },
+          images
+        };
+      }
+
+      // Fallback
+      return {
+        designConfig: {
+          states: canvasStates,
+          color: selectedColor,
+        },
+        images: {
+          'big-front': null,
+          'small-front': null,
+          back: null,
+          left: null,
+          right: null,
+        }
+      };
+    },
+    loadDesignData: (designConfig: any) => {
+      console.log('=== loadDesignData called ===');
+      console.log('designConfig:', designConfig);
+      console.log('designConfig.states:', designConfig?.states);
+      console.log('currentArea:', currentArea);
+
+      if (designConfig?.states) {
+        setCanvasStates(designConfig.states);
+
+        // Load initial state for current area immediately if possible
+        const currentState = designConfig.states[currentArea];
+        console.log('Current area state:', currentState);
+
+        if (currentState && canvasRef.current) {
+          console.log('Loading canvas state for', currentArea);
+          canvasRef.current.loadFromJSON(currentState, () => {
+            canvasRef.current.renderAll();
+            console.log('Canvas rendered successfully');
+          });
+        } else {
+          console.log('No state found for current area or no canvas ref');
+        }
+      }
+      if (designConfig?.color) {
+        setSelectedColor(designConfig.color);
+      }
+    }
+  }));
 
   // Undo/Redo functionality
   const saveCanvasState = useCallback(() => {
     if (!canvasRef?.current) return;
-    
+
     const canvasState = JSON.stringify(canvasRef.current.toJSON());
-    
+
     // Update the current area's state
     setCanvasStates(prev => ({
       ...prev,
       [currentArea]: canvasState
     }));
-    
+
     // Update the current area's history
     setCanvasHistories(prev => {
       const currentHistory = prev[currentArea] || [];
@@ -58,7 +160,7 @@ const DesignCanvas = () => {
         [currentArea]: newHistory
       };
     });
-    
+
     // Update the current area's history index
     setHistoryIndices(prev => ({
       ...prev,
@@ -69,12 +171,12 @@ const DesignCanvas = () => {
   // Canvas event handlers
   const handleCanvasReady = useCallback((canvas: any) => {
     canvasRef.current = canvas;
-    
+
     // Add listener for text changes
     canvas.on('text:changed', () => {
       saveCanvasState();
     });
-    
+
     // Load the current area's state if it exists
     const currentState = canvasStates[currentArea];
     if (currentState) {
@@ -142,7 +244,7 @@ const DesignCanvas = () => {
   const handleUndo = useCallback(() => {
     const currentIndex = historyIndices[currentArea];
     const currentHistory = canvasHistories[currentArea] || [];
-    
+
     if (currentIndex > 0 && canvasRef?.current) {
       const newIndex = currentIndex - 1;
       const canvasState = currentHistory[newIndex];
@@ -164,7 +266,7 @@ const DesignCanvas = () => {
   const handleRedo = useCallback(() => {
     const currentIndex = historyIndices[currentArea];
     const currentHistory = canvasHistories[currentArea] || [];
-    
+
     if (currentIndex < currentHistory.length - 1 && canvasRef?.current) {
       const newIndex = currentIndex + 1;
       const canvasState = currentHistory[newIndex];
@@ -193,11 +295,17 @@ const DesignCanvas = () => {
       const canvas = canvasRef?.current;
       const img = new Image();
       img.onload = () => {
+        const isSmall = currentArea === 'small-front';
+        const canvasWidth = isSmall ? 176 : 220;
+        const canvasHeight = isSmall ? 96 : 270;
+
         const fabricImg = new fabric.FabricImage(img, {
-          left: 150,
-          top: 200,
-          scaleX: 0.5,
-          scaleY: 0.5,
+          left: canvasWidth / 2,
+          top: canvasHeight / 2,
+          originX: 'center',
+          originY: 'center',
+          scaleX: isSmall ? 0.2 : 0.5,
+          scaleY: isSmall ? 0.2 : 0.5,
           selectable: true
         });
         canvas?.add(fabricImg);
@@ -219,15 +327,21 @@ const DesignCanvas = () => {
     if (!canvasRef?.current) return;
 
     const canvas = canvasRef?.current;
+    const isSmall = currentArea === 'small-front';
+    const canvasWidth = isSmall ? 176 : 220;
+    const canvasHeight = isSmall ? 96 : 270;
+
     const text = new fabric.Textbox('PODTEXT', {
-      left: 50,
-      top: 50,
+      left: canvasWidth / 2,
+      top: canvasHeight / 2,
+      originX: 'center',
+      originY: 'center',
       fontFamily: 'Arial',
-      fontSize: 24,
+      fontSize: isSmall ? 16 : 24,
       fill: '#FFFFFF',
       selectable: true,
       editable: true,
-      width: 140,
+      width: isSmall ? 80 : 140,
       splitByGrapheme: false
     });
     canvas?.add(text);
@@ -251,11 +365,11 @@ const DesignCanvas = () => {
         [currentArea]: currentState
       }));
     }
-    
+
     // Switch to new area
     setCurrentArea(newArea);
     setSelectedElement(null);
-    
+
     // Load new area's state
     setTimeout(() => {
       if (canvasRef?.current) {
@@ -316,7 +430,7 @@ const DesignCanvas = () => {
           {/* Color Selector */}
           <div className="flex flex-col items-center space-y-2">
             <span className="text-xs text-gray-600 dark:text-gray-400">Color</span>
-            <div 
+            <div
               className="w-8 h-8 rounded border-2 border-gray-300 cursor-pointer"
               style={{ backgroundColor: selectedColor }}
             />
@@ -365,7 +479,7 @@ const DesignCanvas = () => {
               <button
                 onClick={() => {
                   if (canvasRef?.current) {
-                    const dataURL = canvasRef.current.toDataURL('image/png');
+                    const dataURL = canvasRef.current.toDataURL({ format: 'png', multiplier: 1 }); // Keep PNG for download
                     handleExportArea(dataURL, currentArea);
                   }
                 }}
@@ -378,8 +492,10 @@ const DesignCanvas = () => {
               </button>
               <button
                 onClick={() => {
+                  const exportOptions: any = { format: 'jpeg', quality: 0.8 };
                   const designs = {
-                    front: canvasRef?.current?.toDataURL('image/png'),
+                    'big-front': canvasRef?.current?.toDataURL(exportOptions),
+                    'small-front': null,
                     back: null,
                     leftSleeve: null,
                     rightSleeve: null
@@ -402,17 +518,16 @@ const DesignCanvas = () => {
           {/* Design Area Tabs */}
           <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
             <div className="flex justify-center space-x-1">
-              {['front', 'back', 'left', 'right'].map((area) => (
+              {['big-front', 'small-front', 'back', 'left', 'right'].map((area) => (
                 <button
                   key={area}
                   onClick={() => handleAreaChange(area)}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    currentArea === area
-                      ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${currentArea === area
+                    ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
                 >
-                  {area.charAt(0).toUpperCase() + area.slice(1)}
+                  {area === 'big-front' ? 'Big Front' : area === 'small-front' ? 'Small Front' : area.charAt(0).toUpperCase() + area.slice(1)}
                 </button>
               ))}
             </div>
@@ -447,6 +562,8 @@ const DesignCanvas = () => {
       </div>
     </div>
   );
-};
+});
+
+DesignCanvas.displayName = 'DesignCanvas';
 
 export default DesignCanvas;

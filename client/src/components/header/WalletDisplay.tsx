@@ -4,12 +4,14 @@ import { WalletIcon } from "@/icons";
 
 interface WalletDisplayProps {
   balance?: number;
+  points?: number;
   currency?: string;
   className?: string;
 }
 
 const WalletDisplay: React.FC<WalletDisplayProps> = ({
   balance = 0,
+  points = 0,
   currency = "USD",
   className = "",
 }) => {
@@ -34,11 +36,11 @@ const WalletDisplay: React.FC<WalletDisplayProps> = ({
       
       {/* Balance Display */}
       <div className="flex flex-col">
-        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-          Wallet Balance
-        </span>
         <span className="text-sm font-semibold text-gray-800 dark:text-white/90">
           {formatBalance(balance)}
+        </span>
+        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+          {points} points
         </span>
       </div>
     </div>

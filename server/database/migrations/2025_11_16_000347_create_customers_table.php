@@ -1,0 +1,39 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('customers', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained('users')->onDelete('cascade'); // seller who owns this customer
+            $table->string('name');
+            $table->string('email');
+            $table->string('phone');
+            $table->text('notes')->nullable(); // Additional notes about customer
+            $table->integer('total_orders')->default(0); // Track number of orders
+            $table->decimal('total_spent', 10, 2)->default(0.00); // Track total amount spent
+            $table->timestamp('last_order_date')->nullable(); // Last order date
+            $table->timestamps();
+
+            // Indexes
+            $table->index(['user_id', 'email']);
+            $table->unique(['user_id', 'email']); // Each seller can have unique customer emails
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('customers');
+    }
+};

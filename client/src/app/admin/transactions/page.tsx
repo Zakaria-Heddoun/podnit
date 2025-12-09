@@ -1,16 +1,18 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHeader, 
-  TableRow 
+import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import Badge from "@/components/ui/badge/Badge";
+import { useAuth } from "@/context/AuthContext";
 
-// Transaction interface
+// Transaction interface for unified deposits and withdrawals
 interface Transaction {
   id: number;
   transactionId: string;
@@ -21,189 +23,308 @@ interface Transaction {
   };
   amount: number;
   currency: string;
-  paymentMethod: "Credit Card" | "PayPal" | "Bank Transfer" | "Crypto" | "Apple Pay" | "Google Pay";
-  status: "Completed" | "Pending" | "Failed" | "Refunded" | "Cancelled";
-  type: "Sale" | "Refund" | "Subscription" | "Fee";
+  paymentMethod: "Bank Transfer" | "Withdrawal";
+  status: "PENDING" | "VALIDATED" | "REJECTED" | "PROCESSED" | "CANCELLED";
+  type: "Deposit" | "Withdrawal";
   date: string;
-  orderId?: string;
-  gatewayId?: string;
   fees?: number;
+  adminNotes?: string;
+  referenceNumber?: string;
+  bankName?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bankDetails?: any;
 }
 
-// Sample transaction data
-const sampleTransactions: Transaction[] = [
-  {
-    id: 1,
-    transactionId: "TXN-001",
-    customer: {
-      name: "John Doe",
-      email: "john.doe@example.com",
-      avatar: "/images/user/user-01.jpg"
-    },
-    amount: 2399.00,
-    currency: "USD",
-    paymentMethod: "Credit Card",
-    status: "Completed",
-    type: "Sale",
-    date: "2024-01-20T10:30:00Z",
-    orderId: "ORD-001",
-    gatewayId: "ch_1OmMuG2eZvKYlo2C123456",
-    fees: 71.97
-  },
-  {
-    id: 2,
-    transactionId: "TXN-002",
-    customer: {
-      name: "Jane Smith",
-      email: "jane.smith@example.com",
-      avatar: "/images/user/user-02.jpg"
-    },
-    amount: 1869.00,
-    currency: "USD",
-    paymentMethod: "PayPal",
-    status: "Completed",
-    type: "Sale",
-    date: "2024-01-19T15:45:00Z",
-    orderId: "ORD-002",
-    gatewayId: "PAYID-MQX2LFQ12345678",
-    fees: 56.07
-  },
-  {
-    id: 3,
-    transactionId: "TXN-003",
-    customer: {
-      name: "Mike Johnson",
-      email: "mike.johnson@example.com",
-      avatar: "/images/user/user-03.jpg"
-    },
-    amount: 879.00,
-    currency: "USD",
-    paymentMethod: "Apple Pay",
-    status: "Failed",
-    type: "Sale",
-    date: "2024-01-18T09:15:00Z",
-    orderId: "ORD-003",
-    fees: 0
-  },
-  {
-    id: 4,
-    transactionId: "TXN-004",
-    customer: {
-      name: "Sarah Wilson",
-      email: "sarah.wilson@example.com",
-      avatar: "/images/user/user-04.jpg"
-    },
-    amount: 240.00,
-    currency: "USD",
-    paymentMethod: "Credit Card",
-    status: "Completed",
-    type: "Sale",
-    date: "2024-01-17T14:20:00Z",
-    orderId: "ORD-004",
-    gatewayId: "ch_1OmMuG2eZvKYlo2C789012",
-    fees: 7.20
-  },
-  {
-    id: 5,
-    transactionId: "TXN-005",
-    customer: {
-      name: "David Brown",
-      email: "david.brown@example.com",
-      avatar: "/images/user/user-05.jpg"
-    },
-    amount: 1699.00,
-    currency: "USD",
-    paymentMethod: "Credit Card",
-    status: "Refunded",
-    type: "Refund",
-    date: "2024-01-16T11:30:00Z",
-    orderId: "ORD-005",
-    gatewayId: "ch_1OmMuG2eZvKYlo2C345678",
-    fees: -50.97
-  },
-  {
-    id: 6,
-    transactionId: "TXN-006",
-    customer: {
-      name: "Lisa Anderson",
-      email: "lisa.anderson@example.com",
-      avatar: "/images/user/user-06.jpg"
-    },
-    amount: 1299.00,
-    currency: "USD",
-    paymentMethod: "Bank Transfer",
-    status: "Pending",
-    type: "Sale",
-    date: "2024-01-21T16:00:00Z",
-    orderId: "ORD-006",
-    fees: 25.98
-  },
-  {
-    id: 7,
-    transactionId: "TXN-007",
-    customer: {
-      name: "Robert Taylor",
-      email: "robert.taylor@example.com",
-      avatar: "/images/user/user-07.jpg"
-    },
-    amount: 99.00,
-    currency: "USD",
-    paymentMethod: "Google Pay",
-    status: "Completed",
-    type: "Subscription",
-    date: "2024-01-15T08:45:00Z",
-    fees: 2.97
-  },
-  {
-    id: 8,
-    transactionId: "TXN-008",
-    customer: {
-      name: "Emily Davis",
-      email: "emily.davis@example.com",
-      avatar: "/images/user/user-08.jpg"
-    },
-    amount: 399.00,
-    currency: "USD",
-    paymentMethod: "Crypto",
-    status: "Completed",
-    type: "Sale",
-    date: "2024-01-14T12:30:00Z",
-    orderId: "ORD-007",
-    gatewayId: "btc_1OmMuG2eZvKYlo2C901234",
-    fees: 11.97
-  }
-];
+// API Response interfaces
+interface DepositResponse {
+  id: number;
+  user_id: number;
+  amount: number | string; // Can be string from API
+  bank_name: string;
+  receipt_image: string;
+  reference_number?: string;
+  status: "PENDING" | "VALIDATED" | "REJECTED";
+  admin_notes?: string;
+  validated_by?: number;
+  validated_at?: string;
+  created_at: string;
+  updated_at: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  validator?: {
+    id: number;
+    name: string;
+  };
+}
+
+interface WithdrawalResponse {
+  id: number;
+  user_id: number;
+  amount: number | string; // Can be string from API
+  fee: number | string; // Can be string from API
+  net_amount: number | string; // Can be string from API
+  status: "PENDING" | "PROCESSED" | "REJECTED" | "CANCELLED";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bank_details: any;
+  admin_notes?: string;
+  processed_by?: number;
+  processed_at?: string;
+  created_at: string;
+  updated_at: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  processor?: {
+    id: number;
+    name: string;
+  };
+}
 
 export default function AdminTransactions() {
+  const { user, token } = useAuth();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
   const [selectedType, setSelectedType] = useState<string>("All");
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("All");
+  const [selectedPaymentMethod] = useState<string>("All");
   const [dateFilter, setDateFilter] = useState<string>("All");
 
-  const statuses = ["All", "Completed", "Pending", "Failed", "Refunded", "Cancelled"];
-  const types = ["All", "Sale", "Refund", "Subscription", "Fee"];
-  const paymentMethods = ["All", "Credit Card", "PayPal", "Bank Transfer", "Crypto", "Apple Pay", "Google Pay"];
+  const statuses = ["All", "PENDING", "VALIDATED", "REJECTED", "PROCESSED", "CANCELLED"];
+  const types = ["All", "Deposit", "Withdrawal"];
   const dateFilters = ["All", "Today", "This Week", "This Month", "Last 30 Days"];
+
+  // Transform API responses to unified transaction format
+  const transformDeposit = (deposit: DepositResponse): Transaction => {
+    // Ensure amount is properly converted to number
+    const amount = typeof deposit.amount === 'string' ? parseFloat(deposit.amount) : deposit.amount;
+    console.log('Deposit transformation - raw amount:', deposit.amount, 'converted:', amount); // Debug log
+
+    const transactionId = `DEP-${deposit.id.toString().padStart(6, '0')}`;
+    console.log('Generated deposit transaction ID:', transactionId, 'for deposit ID:', deposit.id); // Debug log
+
+    return {
+      id: deposit.id,
+      transactionId,
+      customer: {
+        name: deposit.user.name,
+        email: deposit.user.email,
+      },
+      amount: amount,
+      currency: "DH",
+      paymentMethod: "Bank Transfer",
+      status: deposit.status,
+      type: "Deposit",
+      date: deposit.created_at,
+      fees: 0,
+      adminNotes: deposit.admin_notes,
+      referenceNumber: deposit.reference_number,
+      bankName: deposit.bank_name,
+    };
+  };
+
+  const transformWithdrawal = (withdrawal: WithdrawalResponse): Transaction => {
+    // Ensure amount is properly converted to number
+    const amount = typeof withdrawal.amount === 'string' ? parseFloat(withdrawal.amount) : withdrawal.amount;
+    const fee = typeof withdrawal.fee === 'string' ? parseFloat(withdrawal.fee) : withdrawal.fee;
+    console.log('Withdrawal transformation - raw amount:', withdrawal.amount, 'converted:', amount); // Debug log
+
+    const transactionId = `WITH-${withdrawal.id.toString().padStart(6, '0')}`;
+    console.log('Generated withdrawal transaction ID:', transactionId, 'for withdrawal ID:', withdrawal.id); // Debug log
+
+    return {
+      id: withdrawal.id,
+      transactionId,
+      customer: {
+        name: withdrawal.user.name,
+        email: withdrawal.user.email,
+      },
+      amount: amount,
+      currency: "DH",
+      paymentMethod: "Withdrawal",
+      status: withdrawal.status,
+      type: "Withdrawal",
+      date: withdrawal.created_at,
+      fees: fee,
+      adminNotes: withdrawal.admin_notes,
+      bankDetails: withdrawal.bank_details,
+    };
+  };
+
+  // Fetch transactions from API
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      if (!user || !token || user.role !== 'admin') {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+        // Fetch deposits and withdrawals simultaneously
+        const [depositsResponse, withdrawalsResponse] = await Promise.all([
+          fetch(`${API_URL}/api/admin/deposits`, {
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          }),
+          fetch(`${API_URL}/api/admin/withdrawals`, {
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          })
+        ]);
+
+        const allTransactions: Transaction[] = [];
+
+        // Process deposits
+        if (depositsResponse.ok) {
+          const depositsResult = await depositsResponse.json();
+          console.log('Raw deposits response:', depositsResult); // Debug log
+          if (depositsResult.success && depositsResult.data) {
+            const depositsData = Array.isArray(depositsResult.data.data)
+              ? depositsResult.data.data
+              : Array.isArray(depositsResult.data)
+                ? depositsResult.data
+                : [];
+
+            console.log('Deposits data:', depositsData); // Debug log
+            const depositTransactions = depositsData.map(transformDeposit);
+            console.log('Transformed deposits:', depositTransactions); // Debug log
+            allTransactions.push(...depositTransactions);
+          }
+        }
+
+        // Process withdrawals
+        if (withdrawalsResponse.ok) {
+          const withdrawalsResult = await withdrawalsResponse.json();
+          if (withdrawalsResult.success && withdrawalsResult.data) {
+            const withdrawalsData = Array.isArray(withdrawalsResult.data.data)
+              ? withdrawalsResult.data.data
+              : Array.isArray(withdrawalsResult.data)
+                ? withdrawalsResult.data
+                : [];
+
+            const withdrawalTransactions = withdrawalsData.map(transformWithdrawal);
+            allTransactions.push(...withdrawalTransactions);
+          }
+        }
+
+        // Sort by date (newest first)
+        allTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setTransactions(allTransactions);
+
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+        setTransactions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, [user, token]);
+
+  const router = useRouter();
+
+  // Handle viewing transaction details
+  const handleViewTransaction = (transaction: Transaction) => {
+    console.log('Viewing transaction:', transaction); // Debug log
+    console.log('Navigating to:', `/admin/transactions/${transaction.transactionId}`); // Debug log
+    router.push(`/admin/transactions/${transaction.transactionId}`);
+  };
+
+  // Handle transaction actions
+  const handleApproveTransaction = async (transaction: Transaction) => {
+    if (!token) return;
+
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const endpoint = transaction.type === 'Deposit'
+        ? `${API_URL}/api/admin/deposits/${transaction.id}`
+        : `${API_URL}/api/admin/withdrawals/${transaction.id}`;
+
+      const status = transaction.type === 'Deposit' ? 'VALIDATED' : 'PROCESSED';
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: status,
+          admin_notes: `Approved by admin on ${new Date().toLocaleDateString()}`
+        })
+      });
+
+      if (response.ok) {
+        // Refresh transactions
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error approving transaction:', error);
+    }
+  };
+
+  const handleRejectTransaction = async (transaction: Transaction) => {
+    if (!token) return;
+
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const endpoint = transaction.type === 'Deposit'
+        ? `${API_URL}/api/admin/deposits/${transaction.id}`
+        : `${API_URL}/api/admin/withdrawals/${transaction.id}`;
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'REJECTED',
+          admin_notes: `Rejected by admin on ${new Date().toLocaleDateString()}`
+        })
+      });
+
+      if (response.ok) {
+        // Refresh transactions
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error rejecting transaction:', error);
+    }
+  };
 
   // Filter transactions
   const filteredTransactions = useMemo(() => {
-    return sampleTransactions.filter(transaction => {
-      const matchesSearch = 
+    return transactions.filter(transaction => {
+      const matchesSearch =
         transaction.transactionId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         transaction.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         transaction.customer.email.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesStatus = selectedStatus === "All" || transaction.status === selectedStatus;
       const matchesType = selectedType === "All" || transaction.type === selectedType;
       const matchesPaymentMethod = selectedPaymentMethod === "All" || transaction.paymentMethod === selectedPaymentMethod;
-      
-      // Simple date filtering (for demo purposes)
+
+      // Simple date filtering
       let matchesDate = true;
       if (dateFilter !== "All") {
         const transactionDate = new Date(transaction.date);
         const today = new Date();
-        
+
         switch (dateFilter) {
           case "Today":
             matchesDate = transactionDate.toDateString() === today.toDateString();
@@ -213,8 +334,8 @@ export default function AdminTransactions() {
             matchesDate = transactionDate >= weekAgo;
             break;
           case "This Month":
-            matchesDate = transactionDate.getMonth() === today.getMonth() && 
-                         transactionDate.getFullYear() === today.getFullYear();
+            matchesDate = transactionDate.getMonth() === today.getMonth() &&
+              transactionDate.getFullYear() === today.getFullYear();
             break;
           case "Last 30 Days":
             const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -222,40 +343,59 @@ export default function AdminTransactions() {
             break;
         }
       }
-      
+
       return matchesSearch && matchesStatus && matchesType && matchesPaymentMethod && matchesDate;
     });
-  }, [searchTerm, selectedStatus, selectedType, selectedPaymentMethod, dateFilter]);
+  }, [transactions, searchTerm, selectedStatus, selectedType, selectedPaymentMethod, dateFilter]);
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const completedTransactions = sampleTransactions.filter(t => t.status === "Completed");
-    const totalRevenue = completedTransactions.reduce((sum, t) => sum + (t.type === "Sale" || t.type === "Subscription" ? t.amount : 0), 0);
-    const totalFees = completedTransactions.reduce((sum, t) => sum + (t.fees || 0), 0);
-    
+    if (!transactions || transactions.length === 0) {
+      return {
+        totalRevenue: 0,
+        todaysDeposits: 0,
+        pendingCount: 0,
+        rejectedCount: 0,
+        totalFees: 0,
+        netRevenue: 0
+      };
+    }
+
+    const validatedDeposits = transactions.filter(t => t.type === "Deposit" && t.status === "VALIDATED");
+    const processedWithdrawals = transactions.filter(t => t.type === "Withdrawal" && t.status === "PROCESSED");
+
+    const totalRevenue = validatedDeposits.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const totalWithdrawals = processedWithdrawals.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const totalFees = transactions.reduce((sum, t) => sum + (t.fees || 0), 0);
+
     const today = new Date().toDateString();
-    const todaysSales = completedTransactions
+    const todaysDeposits = validatedDeposits
       .filter(t => new Date(t.date).toDateString() === today)
-      .reduce((sum, t) => sum + (t.type === "Sale" || t.type === "Subscription" ? t.amount : 0), 0);
-    
-    const pendingCount = sampleTransactions.filter(t => t.status === "Pending").length;
-    const failedCount = sampleTransactions.filter(t => t.status === "Failed").length;
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+    const pendingCount = transactions.filter(t => t.status === "PENDING").length;
+    const rejectedCount = transactions.filter(t => t.status === "REJECTED" || t.status === "CANCELLED").length;
 
     return {
       totalRevenue,
-      todaysSales,
+      todaysDeposits,
       pendingCount,
-      failedCount,
+      rejectedCount,
       totalFees,
-      netRevenue: totalRevenue - totalFees
+      netRevenue: totalRevenue - totalWithdrawals - totalFees
     };
-  }, []);
+  }, [transactions]);
 
-  const formatCurrency = (amount: number, currency: string = "USD") => {
+  const formatCurrency = (amount: number | undefined | null, currency: string = "DH") => {
+    // Ensure we have a valid number
+    const safeAmount = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
+    if (currency === "DH") {
+      return `${safeAmount.toFixed(2)} DH`;
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency
-    }).format(amount);
+    }).format(safeAmount);
   };
 
   const formatDate = (dateString: string) => {
@@ -267,6 +407,31 @@ export default function AdminTransactions() {
       minute: '2-digit'
     });
   };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Check authentication and admin role
+  if (!user || user.role !== 'admin') {
+    return (
+      <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Access Denied</h3>
+            <p className="text-gray-600 dark:text-gray-400">You need admin privileges to access this page.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
@@ -300,7 +465,7 @@ export default function AdminTransactions() {
               <h4 className="text-title-md font-bold text-black dark:text-white">
                 {formatCurrency(stats.totalRevenue)}
               </h4>
-              <span className="text-sm font-medium">Total Revenue</span>
+              <span className="text-sm font-medium">Total Deposits</span>
               <div className="mt-1">
                 <span className="text-xs text-gray-500">Net: {formatCurrency(stats.netRevenue)}</span>
               </div>
@@ -325,9 +490,9 @@ export default function AdminTransactions() {
           <div className="mt-4 flex items-end justify-between">
             <div>
               <h4 className="text-title-md font-bold text-black dark:text-white">
-                {formatCurrency(stats.todaysSales)}
+                {formatCurrency(stats.todaysDeposits)}
               </h4>
-              <span className="text-sm font-medium">Today's Sales</span>
+              <span className="text-sm font-medium">Today&apos;s Deposits</span>
             </div>
           </div>
         </div>
@@ -352,7 +517,7 @@ export default function AdminTransactions() {
               <h4 className="text-title-md font-bold text-black dark:text-white">
                 {stats.pendingCount}
               </h4>
-              <span className="text-sm font-medium">Pending Payments</span>
+              <span className="text-sm font-medium">Pending Transactions</span>
             </div>
           </div>
         </div>
@@ -375,9 +540,9 @@ export default function AdminTransactions() {
           <div className="mt-4 flex items-end justify-between">
             <div>
               <h4 className="text-title-md font-bold text-black dark:text-white">
-                {stats.failedCount}
+                {stats.rejectedCount}
               </h4>
-              <span className="text-sm font-medium">Failed Transactions</span>
+              <span className="text-sm font-medium">Rejected/Cancelled</span>
             </div>
           </div>
         </div>
@@ -391,7 +556,7 @@ export default function AdminTransactions() {
               All Transactions
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {filteredTransactions.length} of {sampleTransactions.length} transactions
+              {filteredTransactions.length} of {transactions.length} transactions
             </p>
           </div>
 
@@ -516,11 +681,7 @@ export default function AdminTransactions() {
                       <p className="text-gray-500 text-xs dark:text-gray-400">
                         {transaction.type}
                       </p>
-                      {transaction.orderId && (
-                        <p className="text-gray-400 text-xs dark:text-gray-500">
-                          Order: {transaction.orderId}
-                        </p>
-                      )}
+
                     </div>
                   </TableCell>
                   <TableCell className="py-4">
@@ -535,13 +696,10 @@ export default function AdminTransactions() {
                   </TableCell>
                   <TableCell className="py-4">
                     <div>
-                      <p className={`font-medium text-sm ${
-                        transaction.type === "Refund" ? "text-red-600 dark:text-red-400" : 
-                        "text-gray-800 dark:text-white/90"
-                      }`}>
-                        {transaction.type === "Refund" ? "-" : ""}{formatCurrency(transaction.amount)}
+                      <p className={`font-medium text-sm text-gray-800 dark:text-white/90`}>
+                        {formatCurrency(transaction.amount)}
                       </p>
-                      {transaction.fees && transaction.fees > 0 && (
+                      {transaction.fees != null && transaction.fees > 0 && (
                         <p className="text-gray-500 text-xs dark:text-gray-400">
                           Fee: {formatCurrency(transaction.fees)}
                         </p>
@@ -560,10 +718,9 @@ export default function AdminTransactions() {
                     <Badge
                       size="sm"
                       color={
-                        transaction.status === "Completed" ? "success" :
-                        transaction.status === "Pending" ? "warning" :
-                        transaction.status === "Failed" ? "error" :
-                        transaction.status === "Refunded" ? "info" : "light"
+                        transaction.status === "VALIDATED" || transaction.status === "PROCESSED" ? "success" :
+                          transaction.status === "PENDING" ? "warning" :
+                            transaction.status === "REJECTED" || transaction.status === "CANCELLED" ? "error" : "light"
                       }
                     >
                       {transaction.status}
@@ -577,30 +734,47 @@ export default function AdminTransactions() {
                       <button
                         className="rounded-lg bg-gray-100 p-2 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
                         title="View Details"
+                        onClick={() => handleViewTransaction(transaction)}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                       </button>
-                      {transaction.status === "Completed" && transaction.type !== "Refund" && (
+
+                      {transaction.status === "PENDING" && (
+                        <>
+                          <button
+                            className="rounded-lg bg-green-50 p-2 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30"
+                            title="Approve Transaction"
+                            onClick={() => handleApproveTransaction(transaction)}
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
+                          <button
+                            className="rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                            title="Reject Transaction"
+                            onClick={() => handleRejectTransaction(transaction)}
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
+
+                      {(transaction.type === "Deposit" && transaction.status === "VALIDATED") && (
                         <button
-                          className="rounded-lg bg-orange-50 p-2 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400 dark:hover:bg-orange-900/30"
-                          title="Refund"
+                          className="rounded-lg bg-blue-50 p-2 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                          title="View Receipt"
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                         </button>
                       )}
-                      <button
-                        className="rounded-lg bg-blue-50 p-2 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30"
-                        title="Download Receipt"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </button>
                     </div>
                   </TableCell>
                 </TableRow>

@@ -1,0 +1,3 @@
+# Placeholder for missing product images
+# This file serves as a placeholder when product images fail to load
+# Replace this with an actual placeholder image (PNG/JPG)
