@@ -29,6 +29,20 @@ class SystemSettingsSeeder extends Seeder
             ['setting_key' => 'max_referrals_per_contact', 'setting_value' => '1', 'description' => 'Maximum referrals per email/phone/RIB'],
             ['setting_key' => 'order_auto_paid_days', 'setting_value' => '7', 'description' => 'Days after shipping to auto-mark as paid'],
             ['setting_key' => 'template_approval_required', 'setting_value' => '1', 'description' => 'Require admin approval for templates'],
+            [
+                'setting_key' => 'studio_canvas_colors',
+                'setting_value' => json_encode([
+                    '#FFFFFF',
+                    '#000000',
+                    '#FF0000',
+                    '#00FF00',
+                    '#0000FF',
+                    '#FFFF00',
+                    '#FF00FF',
+                    '#00FFFF',
+                ]),
+                'description' => 'Available colors for the studio canvas background',
+            ],
         ];
 
         foreach ($settings as $setting) {

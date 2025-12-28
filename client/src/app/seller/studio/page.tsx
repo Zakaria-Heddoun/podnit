@@ -9,17 +9,81 @@ function StudioContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const templateId = searchParams.get("id");
+  const productId = searchParams.get("product");
 
   const canvasRef = useRef<DesignCanvasRef>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [productColors, setProductColors] = useState<string[]>([]);
 
   useEffect(() => {
     if (templateId) {
       loadTemplate(templateId);
     }
   }, [templateId]);
+
+  useEffect(() => {
+    const fetchProductColors = async (id: string) => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/api/seller/products/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+        if (!response.ok) {
+          return;
+        }
+        const payload = await response.json();
+        const rawColors: string[] = Array.isArray(payload?.data?.available_colors)
+          ? payload.data.available_colors
+          : Array.isArray(payload?.available_colors)
+            ? payload.available_colors
+            : [];
+
+        const colorMap: Record<string, string> = {
+          'White': '#FFFFFF',
+          'Black': '#000000',
+          'Navy': '#000080',
+          'Gray': '#808080',
+          'Red': '#FF0000',
+          'Blue': '#0000FF',
+          'Green': '#008000',
+          'Yellow': '#FFFF00',
+          'Royal Blue': '#4169E1',
+          'Forest Green': '#228B22',
+          'Maroon': '#800000',
+          'Light Blue': '#ADD8E6',
+          'Pink': '#FFC0CB',
+          'Natural': '#F5F5DC',
+          'Clear': '#FFFFFF',
+          'Linen': '#FAF0E6'
+        };
+
+        const resolved = rawColors
+          .map((c) => {
+            if (typeof c !== 'string') return null;
+            const trimmed = c.trim();
+            if (/^#([A-Fa-f0-9]{6})$/.test(trimmed)) return trimmed.toUpperCase();
+            return colorMap[trimmed] || null;
+          })
+          .filter((c): c is string => !!c);
+
+        if (resolved.length > 0) {
+          setProductColors(resolved);
+        }
+      } catch (error) {
+        console.error('Failed to load product colors', error);
+      }
+    };
+
+    if (productId) {
+      fetchProductColors(productId);
+    }
+  }, [productId]);
 
   const loadTemplate = async (id: string) => {
     setIsLoading(true);
@@ -226,7 +290,7 @@ function StudioContent() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
           </div>
         )}
-        <DesignCanvas ref={canvasRef} />
+        <DesignCanvas ref={canvasRef} availableColors={productColors} />
       </div>
 
       <SaveTemplateModal

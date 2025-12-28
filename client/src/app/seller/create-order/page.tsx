@@ -41,6 +41,31 @@ export default function CreateOrderPage() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const colorMap: Record<string, string> = {
+    'White': '#FFFFFF',
+    'Black': '#000000',
+    'Navy': '#000080',
+    'Gray': '#808080',
+    'Red': '#FF0000',
+    'Blue': '#0000FF',
+    'Green': '#008000',
+    'Yellow': '#FFFF00',
+    'Royal Blue': '#4169E1',
+    'Forest Green': '#228B22',
+    'Maroon': '#800000',
+    'Light Blue': '#ADD8E6',
+    'Pink': '#FFC0CB',
+    'Natural': '#F5F5DC',
+    'Clear': '#FFFFFF',
+    'Linen': '#FAF0E6'
+  };
+
+  const normalizeColor = (color: string) => {
+    if (typeof color !== 'string') return '';
+    const trimmed = color.trim();
+    if (/^#([A-Fa-f0-9]{6})$/.test(trimmed)) return trimmed.toUpperCase();
+    return colorMap[trimmed] || '';
+  };
 
   // Fetch customers data
   useEffect(() => {
@@ -160,6 +185,9 @@ export default function CreateOrderPage() {
             const data = await response.json();
             if (data.success) {
               const foundProduct = data.data;
+              const normalizedColors = (foundProduct.available_colors || [])
+                .map((c: string) => normalizeColor(c))
+                .filter((c: string) => !!c);
               // Transform API data to match component Product interface if needed,
               // or just use it directly if it matches.
               // The API returns a product object, let's map it to ensure fields match
@@ -168,7 +196,7 @@ export default function CreateOrderPage() {
                 name: foundProduct.name,
                 category: foundProduct.category,
                 base_price: parseFloat(foundProduct.base_price),
-                available_colors: foundProduct.available_colors || [],
+                available_colors: normalizedColors,
                 available_sizes: foundProduct.available_sizes || [],
                 image_url: foundProduct.image_url ?
                   (foundProduct.image_url.startsWith('/') ? `${API_URL}${foundProduct.image_url}` : foundProduct.image_url)

@@ -9,6 +9,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DepositController;
 use App\Http\Controllers\WithdrawalController;
+use App\Http\Controllers\StudioSettingsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -69,6 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/user', [UserController::class, 'update']);
     Route::put('/user/password', [UserController::class, 'updatePassword']);
     Route::get('/user/redirect', [UserController::class, 'getRedirectUrl']);
+    Route::get('/studio/colors', [StudioSettingsController::class, 'getColors']);
 });
 
 // Admin routes (requires authentication and admin role)
@@ -114,6 +116,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // Employee management (admin)
     Route::get('/employees', [\App\Http\Controllers\AdminEmployeeController::class, 'index']);
     Route::post('/employees', [\App\Http\Controllers\AdminEmployeeController::class, 'store']);
+    Route::put('/studio/colors', [StudioSettingsController::class, 'updateColors']);
 });
 
 // Seller routes (requires authentication and seller role)

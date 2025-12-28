@@ -24,7 +24,7 @@ interface Product {
 
 // Transform product for ProductCard component
 const transformProduct = (product: Product) => {
-  // Convert color names to hex values (you could enhance this mapping)
+  // Convert color names to hex values (supports stored hex values too)
   const colorMap: { [key: string]: string } = {
     'White': '#FFFFFF',
     'Black': '#000000',
@@ -44,7 +44,14 @@ const transformProduct = (product: Product) => {
     'Linen': '#FAF0E6'
   };
 
-  const colors = product.available_colors.map(color => colorMap[color] || '#808080');
+  const normalizeColor = (value: string) => {
+    if (typeof value !== 'string') return '#808080';
+    const trimmed = value.trim();
+    if (/^#([A-Fa-f0-9]{6})$/.test(trimmed)) return trimmed.toUpperCase();
+    return colorMap[trimmed] || '#808080';
+  };
+
+  const colors = product.available_colors.map(normalizeColor);
 
   return {
     id: product.id.toString(),

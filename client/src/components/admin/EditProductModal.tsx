@@ -10,7 +10,26 @@ interface EditProductModalProps {
 }
 
 const AVAILABLE_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
-const AVAILABLE_COLORS = ["White", "Black", "Navy", "Gray", "Red", "Blue", "Green", "Yellow"];
+
+const HEX_COLOR_REGEX = /^#([A-Fa-f0-9]{6})$/;
+const NAMED_COLOR_MAP: Record<string, string> = {
+    "White": "#FFFFFF",
+    "Black": "#000000",
+    "Navy": "#000080",
+    "Gray": "#808080",
+    "Red": "#FF0000",
+    "Blue": "#0000FF",
+    "Green": "#008000",
+    "Yellow": "#FFFF00",
+    "Royal Blue": "#4169E1",
+    "Forest Green": "#228B22",
+    "Maroon": "#800000",
+    "Light Blue": "#ADD8E6",
+    "Pink": "#FFC0CB",
+    "Natural": "#F5F5DC",
+    "Clear": "#FFFFFF",
+    "Linen": "#FAF0E6"
+};
 
 export const EditProductModal: React.FC<EditProductModalProps> = ({
     isOpen,
@@ -29,6 +48,8 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
     const [imagePreview, setImagePreview] = useState<string>("");
     const [isLoading, setIsLoading] = useState(false);
     const [isFetchingProduct, setIsFetchingProduct] = useState(false);
+    const [newColor, setNewColor] = useState("#000000");
+    const [colorError, setColorError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchProductDetails = async () => {
@@ -57,13 +78,24 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
                         imageUrl = imageUrl.substring(API_URL.length);
                     }
 
+                    const parsedColors = typeof productData.available_colors === 'string'
+                        ? JSON.parse(productData.available_colors)
+                        : (productData.available_colors || []);
+
+                    const normalizedColors = (parsedColors as string[])
+                        .map((c) => {
+                            if (typeof c !== 'string') return null;
+                            const trimmed = c.trim();
+                            if (HEX_COLOR_REGEX.test(trimmed)) return trimmed.toUpperCase();
+                            return NAMED_COLOR_MAP[trimmed] || null;
+                        })
+                        .filter((c): c is string => !!c);
+
                     setFormData({
                         name: productData.name,
                         price: priceValue,
                         image_url: imageUrl,
-                        available_colors: typeof productData.available_colors === 'string'
-                            ? JSON.parse(productData.available_colors)
-                            : (productData.available_colors || []),
+                        available_colors: normalizedColors,
                         available_sizes: typeof productData.available_sizes === 'string'
                             ? JSON.parse(productData.available_sizes)
                             : (productData.available_sizes || []),
@@ -88,6 +120,11 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!product) return;
+
+        if (formData.available_colors.length === 0) {
+            setColorError("Add at least one color for the studio background.");
+            return;
+        }
 
         setIsLoading(true);
         try {
@@ -141,12 +178,26 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
         }));
     };
 
-    const toggleColor = (color: string) => {
+    const addColor = () => {
+        setColorError(null);
+        const value = newColor.trim().toUpperCase();
+        if (!HEX_COLOR_REGEX.test(value)) {
+            setColorError("Use a 6-digit hex value like #1F2937.");
+            return;
+        }
         setFormData(prev => ({
             ...prev,
-            available_colors: prev.available_colors.includes(color)
-                ? prev.available_colors.filter(c => c !== color)
-                : [...prev.available_colors, color]
+            available_colors: prev.available_colors.includes(value)
+                ? prev.available_colors
+                : [...prev.available_colors, value]
+        }));
+        setNewColor("#000000");
+    };
+
+    const removeColor = (color: string) => {
+        setFormData(prev => ({
+            ...prev,
+            available_colors: prev.available_colors.filter(c => c !== color)
         }));
     };
 
@@ -250,20 +301,62 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
                             <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
                                 Available Colors
                             </label>
-                            <div className="flex flex-wrap gap-2">
-                                {AVAILABLE_COLORS.map(color => (
+                            <div className="space-y-3">
+                                <div className="flex flex-wrap gap-2">
+                                    {formData.available_colors.map((color) => (
+                                        <div
+                                            key={color}
+                                            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/60"
+                                        >
+                                            <span
+                                                className="h-6 w-6 rounded border border-gray-200 shadow-inner"
+                                                style={{ backgroundColor: HEX_COLOR_REGEX.test(color) ? color : '#ffffff' }}
+                                                aria-label={`Color ${color}`}
+                                            />
+                                            <span className="text-sm font-medium text-gray-800 dark:text-white">{color}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeColor(color)}
+                                                className="text-xs font-medium text-red-600 hover:text-red-700"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {formData.available_colors.length === 0 && (
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                                            No colors yet. Add at least one hex color.
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <input
+                                        type="color"
+                                        value={newColor}
+                                        onChange={(e) => setNewColor(e.target.value.toUpperCase())}
+                                        className="h-11 w-11 cursor-pointer rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={newColor}
+                                        onChange={(e) => setNewColor(e.target.value.toUpperCase())}
+                                        placeholder="#1F2937"
+                                        className="flex-1 min-w-[160px] rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                    />
                                     <button
-                                        key={color}
                                         type="button"
-                                        onClick={() => toggleColor(color)}
-                                        className={`rounded px-3 py-1 text-sm ${formData.available_colors.includes(color)
-                                            ? "bg-brand-500 text-white"
-                                            : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-                                            }`}
+                                        onClick={addColor}
+                                        className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                                     >
-                                        {color}
+                                        Add Color
                                     </button>
-                                ))}
+                                </div>
+                                {colorError && (
+                                    <p className="text-xs text-red-600 dark:text-red-400">{colorError}</p>
+                                )}
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Designers will see these colors in the studio background picker.
+                                </p>
                             </div>
                         </div>
 

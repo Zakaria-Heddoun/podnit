@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import * as fabric from 'fabric';
 import TShirtMockup from './components/TShirtMockup';
 import FloatingToolbar from './components/FloatingToolbar';
@@ -23,12 +23,26 @@ export interface DesignCanvasRef {
 
 interface DesignCanvasProps {
   readOnly?: boolean;
+  availableColors?: string[];
 }
 
-const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ readOnly = false }, ref) => {
+const fallbackColors = [
+  '#FFFFFF',
+  '#000000',
+  '#FF0000',
+  '#00FF00',
+  '#0000FF',
+  '#FFFF00',
+  '#FF00FF',
+  '#00FFFF',
+];
+
+const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ readOnly = false, availableColors: incomingColors }, ref) => {
   const [currentArea, setCurrentArea] = useState('big-front');
-  const [selectedColor, setSelectedColor] = useState('#FFFFFF');
+  const resolvedColors = incomingColors && incomingColors.length > 0 ? incomingColors : fallbackColors;
+  const [selectedColor, setSelectedColor] = useState(resolvedColors[0] || '#FFFFFF');
   const [selectedElement, setSelectedElement] = useState<any>(null);
+  const [availableColors, setAvailableColors] = useState<string[]>(resolvedColors);
 
   // Separate canvas states for each side
   const [canvasStates, setCanvasStates] = useState<{ [key: string]: string }>({
@@ -57,6 +71,12 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
   });
 
   const canvasRef = useRef<any>(null);
+
+  useEffect(() => {
+    const nextColors = incomingColors && incomingColors.length > 0 ? incomingColors : fallbackColors;
+    setAvailableColors(nextColors);
+    setSelectedColor(prev => nextColors.includes(prev) ? prev : (nextColors[0] || '#FFFFFF'));
+  }, [incomingColors]);
 
   React.useImperativeHandle(ref, () => ({
     getDesignData: async () => {
@@ -133,6 +153,9 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
       }
       if (designConfig?.color) {
         setSelectedColor(designConfig.color);
+        setAvailableColors((prev) =>
+          prev.includes(designConfig.color) ? prev : [...prev, designConfig.color]
+        );
       }
     }
   }));
@@ -441,9 +464,6 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
     }, 50);
   }, [currentArea, canvasStates]);
 
-  // Color options
-  const colors = ['#FFFFFF', '#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'];
-
   return (
     <div className="h-full bg-gray-50 dark:bg-gray-900 relative">
       {/* Main Content */}
@@ -485,7 +505,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
               style={{ backgroundColor: selectedColor }}
             />
             <div className="grid grid-cols-2 gap-1">
-              {colors.map((color) => (
+              {availableColors.map((color) => (
                 <div
                   key={color}
                   className="w-4 h-4 rounded cursor-pointer border border-gray-300"
