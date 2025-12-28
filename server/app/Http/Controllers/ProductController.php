@@ -39,6 +39,22 @@ class ProductController extends Controller
         $perPage = min($request->get('per_page', 12), 50); // Max 50 per page
         $products = $query->paginate($perPage);
 
+        // Inject seller-specific prices if user is a seller
+        $user = $request->user();
+        if ($user && $user->role === 'seller') {
+            $sellerPrices = \Illuminate\Support\Facades\DB::table('seller_product_prices')
+                ->where('user_id', $user->id)
+                ->pluck('price', 'product_id');
+
+            foreach ($products->items() as $product) {
+                if (isset($sellerPrices[$product->id])) {
+                    $product->base_price = $sellerPrices[$product->id];
+                    // Also setting a flag in case UI wants to show original
+                    $product->is_custom_price = true; 
+                }
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data' => $products->items(),
@@ -64,6 +80,20 @@ class ProductController extends Controller
                 'success' => false,
                 'message' => 'Product not found'
             ], 404);
+        }
+
+        // Inject seller-specific price if user is a seller
+        $user = request()->user(); // Helper function or passed Request
+        if ($user && $user->role === 'seller') {
+            $sellerPrice = \Illuminate\Support\Facades\DB::table('seller_product_prices')
+                ->where('user_id', $user->id)
+                ->where('product_id', $id)
+                ->value('price');
+
+            if ($sellerPrice) {
+                $product->base_price = $sellerPrice;
+                $product->is_custom_price = true;
+            }
         }
 
         return response()->json([

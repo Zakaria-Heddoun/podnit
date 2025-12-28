@@ -71,4 +71,67 @@ class AdminSellerController extends Controller
             'data' => $seller
         ]);
     }
+
+
+    /**
+     * Get seller specific product prices
+     */
+    public function getSellerProducts(Request $request, User $seller): JsonResponse
+    {
+        if ($seller->role !== 'seller') {
+            return response()->json(['error' => 'User is not a seller'], 400);
+        }
+
+        $prices = \Illuminate\Support\Facades\DB::table('seller_product_prices')
+            ->where('user_id', $seller->id)
+            ->select('product_id', 'price')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $prices
+        ]);
+    }
+
+    /**
+     * Update seller specific product prices
+     */
+    public function updateSellerProducts(Request $request, User $seller): JsonResponse
+    {
+        if ($seller->role !== 'seller') {
+            return response()->json(['error' => 'User is not a seller'], 400);
+        }
+
+        $validated = $request->validate([
+            'products' => 'required|array',
+            'products.*.product_id' => 'required|exists:products,id',
+            'products.*.price' => 'required|numeric|min:0',
+        ]);
+
+        try {
+            \Illuminate\Support\Facades\DB::beginTransaction();
+
+            // We can choose to delete all representing this seller or upsert.
+            // Upsert is safer if we only send partial updates, but the UI sends all modified ones.
+            // Let's iterate and update/insert.
+            
+            foreach ($validated['products'] as $item) {
+                \Illuminate\Support\Facades\DB::table('seller_product_prices')->updateOrInsert(
+                    ['user_id' => $seller->id, 'product_id' => $item['product_id']],
+                    ['price' => $item['price'], 'updated_at' => now(), 'created_at' => now()]
+                );
+            }
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Prices updated successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json(['error' => 'Failed to update prices: ' . $e->getMessage()], 500);
+        }
+    }
 }

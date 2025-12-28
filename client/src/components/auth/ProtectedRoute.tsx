@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: 'admin' | 'seller';
+  requiredRole?: 'admin' | 'seller' | 'employee';
   redirectTo?: string;
 }
 
@@ -15,7 +15,7 @@ export default function ProtectedRoute({
   requiredRole, 
   redirectTo = '/signin' 
 }: ProtectedRouteProps) {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, loading, isAdmin, isSeller, isEmployee } = useAuth();
   const router = useRouter();
   const [hasRedirected, setHasRedirected] = useState(false);
 
@@ -34,20 +34,33 @@ export default function ProtectedRoute({
         return;
       }
 
-      if (requiredRole && user?.role !== requiredRole) {
-        // User doesn't have the required role
-        setHasRedirected(true);
-        if (user?.role === 'admin') {
-          router.push('/admin');
-        } else if (user?.role === 'seller') {
-          router.push('/seller');
-        } else {
-          router.push('/signin');
+      if (requiredRole) {
+        let hasRequiredRole = false;
+        if (requiredRole === 'admin' && isAdmin) {
+          hasRequiredRole = true;
+        } else if (requiredRole === 'seller' && isSeller) {
+          hasRequiredRole = true;
+        } else if (requiredRole === 'employee' && isEmployee) {
+          hasRequiredRole = true;
         }
-        return;
+
+        if (!hasRequiredRole) {
+          // User doesn't have the required role
+          setHasRedirected(true);
+          if (isAdmin) {
+            router.push('/admin');
+          } else if (isSeller) {
+            router.push('/seller');
+          } else if (isEmployee) {
+            router.push('/employee/dashboard');
+          } else {
+            router.push('/signin');
+          }
+          return;
+        }
       }
     }
-  }, [isAuthenticated, user, loading, requiredRole, router, redirectTo, hasRedirected]);
+  }, [isAuthenticated, user, loading, requiredRole, router, redirectTo, hasRedirected, isAdmin, isSeller, isEmployee]);
 
   // Show loading spinner while checking authentication
   if (loading) {
@@ -58,8 +71,20 @@ export default function ProtectedRoute({
     );
   }
 
+  // Check if user has required role
+  let hasRequiredRole = true;
+  if (requiredRole) {
+    if (requiredRole === 'admin') {
+      hasRequiredRole = isAdmin;
+    } else if (requiredRole === 'seller') {
+      hasRequiredRole = isSeller;
+    } else if (requiredRole === 'employee') {
+      hasRequiredRole = isEmployee;
+    }
+  }
+
   // Don't render children if not authenticated or wrong role
-  if (!isAuthenticated || (requiredRole && user?.role !== requiredRole)) {
+  if (!isAuthenticated || !hasRequiredRole) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

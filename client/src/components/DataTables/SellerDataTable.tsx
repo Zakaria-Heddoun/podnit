@@ -12,6 +12,7 @@ interface SellerDataTableProps {
     onBulkAction?: (action: string, selectedItems: Seller[]) => void;
     onEdit?: (item: Seller) => void;
     onToggleStatus?: (item: Seller) => void;
+    onManagePrices?: (item: Seller) => void;
 }
 
 const SellerDataTable: React.FC<SellerDataTableProps> = ({
@@ -21,8 +22,11 @@ const SellerDataTable: React.FC<SellerDataTableProps> = ({
     onSelectionChange,
     onBulkAction,
     onEdit,
-    onToggleStatus
+    onToggleStatus,
+    onManagePrices
 }) => {
+
+
     const [search, setSearch] = useState("");
     const [sortColumn, setSortColumn] = useState("created_at");
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -317,6 +321,15 @@ const SellerDataTable: React.FC<SellerDataTableProps> = ({
                                 <div className="col-span-1 flex items-center px-4 py-3">
                                     <div className="flex space-x-2">
                                         <button
+                                            onClick={() => onManagePrices && onManagePrices(seller)}
+                                            className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
+                                            title="Configure Prices"
+                                        >
+                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 7V3c0-1.105.895-2 2-2z" />
+                                            </svg>
+                                        </button>
+                                        <button
                                             onClick={() => onEdit && onEdit(seller)}
                                             className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                                             title="Edit"
@@ -363,6 +376,15 @@ const SellerDataTable: React.FC<SellerDataTableProps> = ({
                                         </div>
                                     </div>
                                     <div className="flex space-x-2">
+                                        <button
+                                            onClick={() => onManagePrices && onManagePrices(seller)}
+                                            className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
+                                            title="Configure Prices"
+                                        >
+                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 7V3c0-1.105.895-2 2-2z" />
+                                            </svg>
+                                        </button>
                                         <button
                                             onClick={() => onEdit && onEdit(seller)}
                                             className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"

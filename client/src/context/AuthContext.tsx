@@ -6,7 +6,8 @@ interface User {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'seller';
+  role: string; // Can be 'admin', 'seller', or custom role name
+  role_id?: number;
   created_at: string;
   updated_at: string;
   // Basic user fields
@@ -22,6 +23,8 @@ interface User {
   referred_by_id?: number;
   is_verified?: boolean;
   avatar?: string;
+  // Permissions for employees
+  permissions?: string[];
 }
 
 interface AuthContextType {
@@ -34,6 +37,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isSeller: boolean;
+  isEmployee: boolean;
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -156,6 +161,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = !!user && !!token;
   const isAdmin = user?.role === 'admin';
   const isSeller = user?.role === 'seller';
+  const isEmployee = !!user?.role_id && user?.role !== 'admin' && user?.role !== 'seller';
+  
+  // Check if user has a specific permission
+  const hasPermission = (permission: string): boolean => {
+    if (isAdmin) return true; // Admins have all permissions
+    if (user?.permissions && Array.isArray(user.permissions)) {
+      return user.permissions.includes(permission);
+    }
+    return false;
+  };
 
   const value: AuthContextType = {
     user,
@@ -167,6 +182,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated,
     isAdmin,
     isSeller,
+    isEmployee,
+    hasPermission,
   };
 
   return (

@@ -23,6 +23,13 @@ Route::get('/health', function () {
     ]);
 });
 
+// Development helper: expose permissions without auth when running locally
+if (app()->environment('local')) {
+    Route::get('/dev/roles/permissions', function () {
+        return response()->json(['message' => 'Dev permissions', 'data' => config('roles.permissions', [])]);
+    });
+}
+
 // Temporary test routes without authentication (remove in production)
 Route::prefix('test')->group(function () {
     Route::post('/orders/from-product', function (Request $request) {
@@ -96,6 +103,17 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/withdrawals', [WithdrawalController::class, 'adminIndex']);
     Route::get('/withdrawals/{withdrawal}', [WithdrawalController::class, 'adminShow']);
     Route::put('/withdrawals/{withdrawal}', [WithdrawalController::class, 'adminUpdate']);
+
+    // Role management
+    Route::get('/roles', [\App\Http\Controllers\AdminRoleController::class, 'index']);
+    Route::get('/roles/permissions', [\App\Http\Controllers\AdminRoleController::class, 'permissions']);
+    Route::post('/roles', [\App\Http\Controllers\AdminRoleController::class, 'store']);
+    Route::put('/roles/{role}', [\App\Http\Controllers\AdminRoleController::class, 'update']);
+    Route::delete('/roles/{role}', [\App\Http\Controllers\AdminRoleController::class, 'destroy']);
+
+    // Employee management (admin)
+    Route::get('/employees', [\App\Http\Controllers\AdminEmployeeController::class, 'index']);
+    Route::post('/employees', [\App\Http\Controllers\AdminEmployeeController::class, 'store']);
 });
 
 // Seller routes (requires authentication and seller role)

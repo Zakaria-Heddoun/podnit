@@ -250,17 +250,17 @@ export default function AdminOrderDetailPage() {
                     <div className="space-y-3">
                         <div>
                             <span className="text-gray-600 dark:text-gray-400 block">Name:</span>
-                            <span className="font-medium text-black dark:text-white">{order.customer.name}</span>
+                            <span className="font-medium text-black dark:text-white">{order.customer?.name || order.customer_name || 'N/A'}</span>
                         </div>
 
                         <div>
                             <span className="text-gray-600 dark:text-gray-400 block">Email:</span>
-                            <span className="font-medium text-black dark:text-white">{order.customer.email}</span>
+                            <span className="font-medium text-black dark:text-white">{order.customer?.email || order.customer_email || 'N/A'}</span>
                         </div>
 
                         <div>
                             <span className="text-gray-600 dark:text-gray-400 block">Phone:</span>
-                            <span className="font-medium text-black dark:text-white">{order.customer.phone}</span>
+                            <span className="font-medium text-black dark:text-white">{order.customer?.phone || order.customer_phone || 'N/A'}</span>
                         </div>
                     </div>
                 </div>
@@ -311,6 +311,48 @@ export default function AdminOrderDetailPage() {
                 >
                     Back to Orders
                 </Button>
+                {order.template && (
+                    <Button
+                        variant="outline"
+                        onClick={async () => {
+                            if (!order) return;
+                            try {
+                                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                                const token = localStorage.getItem('token');
+
+                                const response = await fetch(`${API_URL}/api/admin/orders/${order.id}/download-assets`, {
+                                    headers: {
+                                        'Authorization': `Bearer ${token}`
+                                    }
+                                });
+
+                                if (response.ok) {
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `order-${order.order_number}-assets.zip`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                    document.body.removeChild(a);
+                                } else {
+                                    alert('Failed to download assets. Please try again later.');
+                                    console.error('Download failed:', response.statusText);
+                                }
+                            } catch (error) {
+                                console.error('Error downloading assets:', error);
+                                alert('An error occurred while downloading assets.');
+                            }
+                        }}
+                        className="border-green-600 text-green-600 hover:bg-green-50"
+                    >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download Assets
+                    </Button>
+                )}
                 <Button
                     onClick={() => window.print()}
                     className="bg-gray-600 hover:bg-gray-700"

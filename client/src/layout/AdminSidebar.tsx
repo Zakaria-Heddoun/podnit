@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   BoxCubeIcon,
   ChevronDownIcon,
@@ -29,6 +30,24 @@ const navItems: NavItem[] = [
     icon: <GridIcon />,
     name: "Dashboard",
     path: "/admin",
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "Employees",
+    path: "/admin/employees",
+    subItems: [
+      { name: "Employees List", path: "/admin/employees" },
+      { name: "Create Employee", path: "/admin/employees/new" },
+    ],
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "Roles",
+    path: "/admin/roles",
+    subItems: [
+      { name: "Roles List", path: "/admin/roles" },
+      { name: "Create Role", path: "/admin/roles/new" },
+    ],
   },
   {
     icon: <GroupIcon />,
@@ -69,6 +88,37 @@ const navItems: NavItem[] = [
 
 const AdminSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { isAdmin, hasPermission } = useAuth();
+
+  // Define simple permission mapping for sidebar items
+  const permissionMap: Record<string, string | string[]> = {
+    Dashboard: 'view_dashboard',
+    Employees: 'manage_users',
+    Roles: 'manage_roles',
+    Sellers: 'view_users',
+    Products: ['view_products', 'manage_products'],
+    Templates: ['view_templates', 'manage_templates', 'approve_templates'],
+    Orders: ['view_orders', 'manage_orders'],
+    Transactions: 'view_transactions',
+    Configuration: 'configure_site',
+    Profile: '',
+  };
+
+  const canViewNav = (nav: NavItem) => {
+    // Admin sees everything
+    if (isAdmin) return true;
+    const mapping = permissionMap[nav.name];
+    if (!mapping) {
+      // If no mapping, restrict by default (only admins)
+      return false;
+    }
+    if (typeof mapping === 'string') {
+      if (mapping === '') return true; // allow profile etc
+      return hasPermission(mapping);
+    }
+    // mapping is array
+    return mapping.some((p) => hasPermission(p));
+  };
   const pathname = usePathname();
 
   const renderMenuItems = (
@@ -308,7 +358,7 @@ const AdminSidebar: React.FC = () => {
                   <HorizontaLDots />
                 )}
               </h2>
-              {renderMenuItems(navItems, "main")}
+              {renderMenuItems(navItems.filter(canViewNav), "main")}
             </div>
           </div>
         </nav>

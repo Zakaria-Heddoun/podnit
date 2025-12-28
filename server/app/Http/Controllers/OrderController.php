@@ -341,21 +341,21 @@ class OrderController extends Controller
             ], 422);
         }
 
-        // Validate color and size options against template
-        if (!in_array($request->selected_color, $template->colors)) {
+        // Validate color and size options against template (if defined)
+        if ($template->colors && is_array($template->colors) && !in_array($request->selected_color, $template->colors)) {
             return response()->json([
                 'error' => 'Invalid color selection for this template'
             ], 422);
         }
 
-        if (!in_array($request->selected_size, $template->sizes)) {
+        if ($template->sizes && is_array($template->sizes) && !in_array($request->selected_size, $template->sizes)) {
             return response()->json([
                 'error' => 'Invalid size selection for this template'
             ], 422);
         }
 
-        // Calculate total using template price
-        $unitPrice = $template->price;
+        // Calculate total using template price or product base price
+        $unitPrice = $template->price ?? $template->product->base_price;
         $totalAmount = $unitPrice * $request->quantity;
 
         // Generate unique order number
@@ -603,6 +603,170 @@ class OrderController extends Controller
                 'error' => 'Order creation failed',
                 'message' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Download order assets (design and placement) as ZIP
+     */
+    public function downloadAssets(Order $order): \Symfony\Component\HttpFoundation\StreamedResponse|\Illuminate\Http\JsonResponse
+    {
+        try {
+            $user = auth()->user();
+
+            // Check if order belongs to the authenticated seller or user is admin
+            if ($user->role !== 'admin' && $order->user_id !== $user->id) {
+                return response()->json([
+                    'error' => 'Unauthorized'
+                ], 403);
+            }
+
+            $order->load(['template', 'product', 'customer']);
+            
+            if (!$order->template) {
+                 return response()->json([
+                    'error' => 'No template associated with this order'
+                ], 404);
+            }
+
+            // Check if ZipArchive class exists
+            if (!class_exists('ZipArchive')) {
+                throw new \Exception('ZipArchive PHP extension is not installed or enabled');
+            }
+
+            $zipFileName = 'order-' . $order->order_number . '-assets.zip';
+
+            return response()->streamDownload(function () use ($order) {
+                $zip = new \ZipArchive;
+                $output = fopen('php://output', 'wb');
+                
+                // Create a temporary file for the zip
+                $tempZipFile = tempnam(sys_get_temp_dir(), 'order_assets_');
+                
+                if ($zip->open($tempZipFile, \ZipArchive::CREATE) === TRUE) {
+                    
+                    // 1. Add Placement Images (Mockups)
+                    $template = $order->template;
+                    
+                    // Array of potential placement images
+                    $placements = [
+                        'Placements/front_big.png' => $template->big_front_image,
+                        'Placements/front_small.png' => $template->small_front_image,
+                        'Placements/back.png' => $template->back_image,
+                        'Placements/sleeve_left.png' => $template->left_sleeve_image,
+                        'Placements/sleeve_right.png' => $template->right_sleeve_image,
+                        'Placements/thumbnail.png' => $template->thumbnail_image
+                    ];
+
+                    $hasPlacement = false;
+                    foreach ($placements as $name => $url) {
+                        if ($url) {
+                            $this->addFileToZip($zip, $url, $name);
+                            $hasPlacement = true;
+                        }
+                    }
+
+                    // 2. Add High Quality Design
+                    // Parse design_config to find the high quality image
+                    $designConfig = $order->template->design_config;
+                    
+                    // If it's a string, decode it
+                    if (is_string($designConfig)) {
+                        $designConfig = json_decode($designConfig, true);
+                    }
+
+                    if (is_array($designConfig)) {
+                        $this->extractImagesFromConfig($zip, $designConfig, 'Designs/');
+                    }
+
+                    $zip->close();
+                    
+                    // Stream the zip content
+                    readfile($tempZipFile);
+                    
+                    // Clean up
+                    unlink($tempZipFile);
+                } else {
+                    Log::error('Failed to create/open zip file at ' . $tempZipFile);
+                }
+            }, $zipFileName);
+
+        } catch (\Exception $e) {
+            Log::error('Download assets failed: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'error' => 'Failed to generate download: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Helper to add a file from URL/Path to ZIP
+     */
+    private function addFileToZip(\ZipArchive $zip, string $pathOrUrl, string $zipEntryName)
+    {
+        try {
+            $content = null;
+            
+            // Check if it's a local storage path
+            if (str_starts_with($pathOrUrl, '/storage/')) {
+                $localPath = public_path($pathOrUrl);
+                if (file_exists($localPath)) {
+                    $zip->addFile($localPath, $zipEntryName);
+                    return;
+                }
+            } elseif (str_starts_with($pathOrUrl, 'http')) {
+                // Remote URL
+                $content = @file_get_contents($pathOrUrl);
+            } else {
+                // assume local public path relative to public/
+                $localPath = public_path($pathOrUrl);
+                 if (file_exists($localPath)) {
+                    $zip->addFile($localPath, $zipEntryName);
+                    return;
+                }
+            }
+
+            if ($content) {
+                $zip->addFromString($zipEntryName, $content);
+            }
+        } catch (\Exception $e) {
+            Log::error("Failed to add file to zip: $pathOrUrl", ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Helper to extract high quality images from design config
+     */
+    private function extractImagesFromConfig(\ZipArchive $zip, array $config, string $folderPrefix = '')
+    {
+        // Recursively search for image sources
+        $imageCount = 1;
+        $objects = $config['objects'] ?? []; // Common Fabric.js structure
+        
+        // Also check direct sides if structured that way
+        $sides = ['front', 'back', 'left', 'right', 'main'];
+        foreach ($config as $key => $value) {
+            if (in_array($key, $sides) && is_array($value)) {
+                 if (isset($value['objects'])) {
+                     $objects = array_merge($objects, $value['objects']);
+                 }
+            }
+        }
+
+        foreach ($objects as $obj) {
+            if (isset($obj['type']) && $obj['type'] === 'image' && !empty($obj['src'])) {
+                if (str_starts_with($obj['src'], 'http') || str_starts_with($obj['src'], '/storage')) {
+                    $extension = pathinfo($obj['src'], PATHINFO_EXTENSION);
+                    if (str_contains($extension, '?')) {
+                        $extension = substr($extension, 0, strpos($extension, '?'));
+                    }
+                    if (!$extension) $extension = 'png';
+                    
+                    $filename = $folderPrefix . "design_hq_{$imageCount}.{$extension}";
+                    $this->addFileToZip($zip, $obj['src'], $filename);
+                    $imageCount++;
+                }
+            }
         }
     }
 }

@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'role_id',
         'brand_name',
         'phone',
         'cin',
@@ -94,5 +95,33 @@ class User extends Authenticatable
     public function templates()
     {
         return $this->hasMany(Template::class);
+    }
+
+    public function roleRelation()
+    {
+        return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    /**
+     * Check whether the user has a given permission key.
+     */
+    public function hasPermission(string $permission): bool
+    {
+        // Admin string role has everything
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        // Check attached role model
+        if ($this->roleRelation) {
+            $perms = $this->roleRelation->permissions ?? [];
+            if (is_array($perms) && in_array($permission, $perms, true)) {
+                return true;
+            }
+        }
+
+        // Fallback: if legacy role string maps to broad permissions
+        // (optional) - keep simple: no permission
+        return false;
     }
 }

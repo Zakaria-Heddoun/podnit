@@ -3,54 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
 
-interface Product {
-  id: number;
-  name: string;
-  category: string;
-  base_price: number;
-  available_colors: string[];
-  available_sizes: string[];
-  image_url?: string;
-}
-
-interface Template {
-  templateId: number;
-  templateName: string;
-  templatePrice: number;
-  templateCategory: string;
-  templateType: string;
-}
-
-interface Customer {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-}
-
-interface OrderFormData {
-  customer_id?: number;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  create_new_customer: boolean;
-  quantity: number;
-  selling_price: number;
-  selected_color: string;
-  selected_size: string;
-  shipping_address: {
-    street: string;
-    city: string;
-    postal_code: string;
-    country: string;
-  };
-  notes?: string;
-}
+// ... (interfaces remain unchanged)
 
 export default function CreateOrderPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { token, loading: loadingAuth } = useAuth();
   const productId = searchParams.get('productId');
   const templateParam = searchParams.get('template');
 
@@ -110,22 +70,66 @@ export default function CreateOrderPage() {
 
   // Fetch product data from API
   useEffect(() => {
+    // Wait for auth to be ready
+    if (loadingAuth) return;
+
     // Handle template-based order
     if (templateParam) {
       try {
         const templateData = JSON.parse(decodeURIComponent(templateParam));
-        setTemplate(templateData);
         setOrderType('template');
 
-        // Set default form values for template
-        setFormData(prev => ({
-          ...prev,
-          selected_color: 'Black',
-          selected_size: 'M',
-          selling_price: templateData.templatePrice
-        }));
+        // Fetch full template data from API
+        const fetchTemplate = async () => {
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+          try {
+            const response = await fetch(`${API_URL}/api/seller/templates/${templateData.templateId}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+              }
+            });
+
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success && result.data) {
+                const fullTemplate = result.data;
+
+                // Map API response to component's Template interface
+                setTemplate({
+                  templateId: fullTemplate.id,
+                  templateName: fullTemplate.title,
+                  templatePrice: parseFloat(fullTemplate.product?.base_price) || 0,
+                  templateCategory: fullTemplate.product?.category || 'Unknown',
+                  templateImage: fullTemplate.thumbnail_image || fullTemplate.big_front_image || fullTemplate.small_front_image
+                });
+
+                // Set default form values
+                setFormData(prev => ({
+                  ...prev,
+                  selected_color: fullTemplate.colors?.[0] || 'Black',
+                  selected_size: fullTemplate.sizes?.[0] || 'M',
+                  selling_price: fullTemplate.product?.base_price || 0
+                }));
+              }
+            } else {
+              console.error('Failed to fetch template');
+            }
+          } catch (err) {
+            console.error('Error fetching template from API:', err);
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        if (token) {
+          fetchTemplate();
+        } else {
+          setLoading(false);
+        }
       } catch (error) {
         console.error('Error parsing template data:', error);
+        setLoading(false);
       }
     }
 
@@ -133,86 +137,69 @@ export default function CreateOrderPage() {
     if (productId && !templateParam) {
       setOrderType('product');
 
+      if (!token) {
+        // No token yet, maybe redirect or wait?
+        // For now, if no token, we can't fetch.
+        console.warn('No auth token available for product fetch');
+        setLoading(false);
+        return;
+      }
+
       const fetchProduct = async () => {
+        // Mock product data for now - matching the seeded products
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
         try {
-          // TODO: Replace with actual API call when backend is running
-          // const response = await fetch(`/api/seller/products/${productId}`);
-          // const data = await response.json();
-          // if (data.success) {
-          //   setProduct(data.data);
-          // }
-
-          // Mock product data for now - matching the seeded products
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-          const mockProducts: Product[] = [
-            {
-              id: 1,
-              name: 'Classic T-Shirt',
-              category: 'T-Shirts',
-              base_price: 89.00,
-              available_colors: ['White', 'Black', 'Navy', 'Gray', 'Red', 'Blue', 'Green', 'Yellow'],
-              available_sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
-              image_url: `${API_URL}/images/products/product-01.jpg`
-            },
-            {
-              id: 2,
-              name: 'Baseball Cap',
-              category: 'Caps',
-              base_price: 65.00,
-              available_colors: ['Black', 'White', 'Navy', 'Red', 'Green', 'Gray', 'Royal Blue'],
-              available_sizes: ['One Size'],
-              image_url: `${API_URL}/images/products/product-02.jpg`
-            },
-            {
-              id: 3,
-              name: 'Pullover Hoodie',
-              category: 'Hoodies',
-              base_price: 159.00,
-              available_colors: ['Black', 'Gray', 'Navy', 'Maroon', 'Forest Green', 'White'],
-              available_sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-              image_url: `${API_URL}/images/products/product-03.jpg`
-            },
-            {
-              id: 4,
-              name: 'Tote Bag',
-              category: 'Bags',
-              base_price: 45.00,
-              available_colors: ['Natural', 'Black', 'Navy', 'Red', 'Forest Green'],
-              available_sizes: ['Standard'],
-              image_url: `${API_URL}/images/products/product-04.jpg`
-            },
-            {
-              id: 5,
-              name: 'Polo Shirt',
-              category: 'T-Shirts',
-              base_price: 119.00,
-              available_colors: ['White', 'Black', 'Navy', 'Royal Blue', 'Red', 'Gray', 'Light Blue'],
-              available_sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-              image_url: `${API_URL}/images/products/product-05.jpg`
+          const response = await fetch(`${API_URL}/api/seller/products/${productId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json'
             }
-          ];
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              const foundProduct = data.data;
+              // Transform API data to match component Product interface if needed,
+              // or just use it directly if it matches.
+              // The API returns a product object, let's map it to ensure fields match
+              const mappedProduct: Product = {
+                id: foundProduct.id,
+                name: foundProduct.name,
+                category: foundProduct.category,
+                base_price: parseFloat(foundProduct.base_price),
+                available_colors: foundProduct.available_colors || [],
+                available_sizes: foundProduct.available_sizes || [],
+                image_url: foundProduct.image_url ?
+                  (foundProduct.image_url.startsWith('/') ? `${API_URL}${foundProduct.image_url}` : foundProduct.image_url)
+                  : undefined
+              };
 
-          const foundProduct = mockProducts.find(p => p.id === parseInt(productId));
-          setProduct(foundProduct || null);
+              setProduct(mappedProduct);
 
-          if (foundProduct) {
-            setFormData(prev => ({
-              ...prev,
-              selected_color: foundProduct.available_colors[0] || '',
-              selected_size: foundProduct.available_sizes[0] || '',
-              selling_price: foundProduct.base_price
-            }));
+              setFormData(prev => ({
+                ...prev,
+                selected_color: mappedProduct.available_colors[0] || '',
+                selected_size: mappedProduct.available_sizes[0] || '',
+                selling_price: mappedProduct.base_price
+              }));
+            }
+          } else {
+            console.error('Failed to fetch product');
           }
-
-        } catch (error) {
-          console.error('Error fetching product:', error);
+        } catch (err) {
+          console.error('Error fetching product from API:', err);
+        } finally {
+          setLoading(false);
         }
       };
 
       fetchProduct();
+    } else if (!templateParam) {
+      // If not fetching a product or template, stop loading immediately
+      setLoading(false);
     }
-    setLoading(false);
-  }, [productId, templateParam]);
+  }, [productId, templateParam, token, loadingAuth]);
 
   const handleCustomerSelection = (customerId: number) => {
     const customer = customers.find(c => c.id === customerId);
@@ -368,49 +355,32 @@ export default function CreateOrderPage() {
     setSubmitting(true);
 
     try {
-      const baseOrderData = {
-        quantity: formData.quantity,
-        customization: {
-          color: formData.selected_color,
-          size: formData.selected_size,
-          notes: formData.notes
-        },
-        shipping_address: formData.shipping_address
-      };
-
-      // Handle customer data - either use existing or create new
-      let customerData;
-      if (formData.create_new_customer) {
-        customerData = {
-          name: formData.customer_name,
-          email: formData.customer_email,
-          phone: formData.customer_phone
-        };
-      } else {
-        customerData = { id: formData.customer_id };
-      }
-
       let orderData;
 
       if (orderType === 'template' && template) {
         orderData = {
-          ...baseOrderData,
-          customer: customerData,
           template_id: template.templateId,
-          unit_price: template.templatePrice,
-          selling_price: formData.selling_price,
-          total_amount: calculateTotal(),
-          order_type: 'template'
+          customer_name: formData.create_new_customer ? formData.customer_name : customers.find(c => c.id === formData.customer_id)?.name || '',
+          customer_email: formData.create_new_customer ? formData.customer_email : customers.find(c => c.id === formData.customer_id)?.email || '',
+          customer_phone: formData.create_new_customer ? formData.customer_phone : customers.find(c => c.id === formData.customer_id)?.phone || '',
+          quantity: formData.quantity,
+          selected_color: formData.selected_color,
+          selected_size: formData.selected_size,
+          shipping_address: formData.shipping_address,
+          notes: formData.notes
         };
       } else if (orderType === 'product' && product) {
         orderData = {
-          ...baseOrderData,
-          customer: customerData,
           product_id: product.id,
-          unit_price: product.base_price,
+          customer_name: formData.create_new_customer ? formData.customer_name : customers.find(c => c.id === formData.customer_id)?.name || '',
+          customer_email: formData.create_new_customer ? formData.customer_email : customers.find(c => c.id === formData.customer_id)?.email || '',
+          customer_phone: formData.create_new_customer ? formData.customer_phone : customers.find(c => c.id === formData.customer_id)?.phone || '',
+          quantity: formData.quantity,
+          selected_color: formData.selected_color,
+          selected_size: formData.selected_size,
           selling_price: formData.selling_price,
-          total_amount: calculateTotal(),
-          order_type: 'product'
+          shipping_address: formData.shipping_address,
+          notes: formData.notes
         };
       }
 
@@ -421,42 +391,41 @@ export default function CreateOrderPage() {
       const endpoint = orderType === 'template' ? 'from-template' : 'from-product';
 
       try {
-        // Use test endpoint for now (remove in production)
-        const apiUrl = `${API_URL}/api/test/orders/${endpoint}`;
+        // Use real seller endpoint
+        const apiUrl = `${API_URL}/api/seller/orders/${endpoint}`;
 
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify(orderData)
         });
 
         if (!response.ok) {
-          // If API fails, fall back to mock behavior for now
-          console.warn('API call failed, using mock behavior');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          alert('Order created successfully (mock)!');
-          router.push('/seller/orders?created=true');
-          return;
+          const errorData = await response.json().catch(() => null);
+          throw new Error(errorData?.error || errorData?.message || `Failed to create order: ${response.statusText}`);
         }
 
         const result = await response.json();
 
-        if (result.success) {
+        // Backend returns { message: "...", data: {...} } on success
+        if (result.data && result.data.order_number) {
           alert(`Order created successfully! Order number: ${result.data.order_number}`);
           router.push('/seller/orders?created=true');
+        } else if (result.message && result.message.includes('successfully')) {
+          // Fallback: if message says success but no order_number
+          alert('Order created successfully!');
+          router.push('/seller/orders?created=true');
         } else {
-          throw new Error(result.message || 'Failed to create order');
+          throw new Error(result.error || result.message || 'Failed to create order');
         }
 
       } catch (apiError) {
-        console.warn('API call failed, using mock behavior:', apiError);
-        // Fallback to mock behavior
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        alert('Order created successfully (mock)!');
-        router.push('/seller/orders?created=true');
+        console.error('API call failed:', apiError);
+        alert(`Error creating order: ${apiError instanceof Error ? apiError.message : 'Unknown error'}`);
       }
 
     } catch (error) {
@@ -537,10 +506,21 @@ export default function CreateOrderPage() {
                 </div>
               )}
               {orderType === 'template' && (
-                <div className="mb-3 h-32 w-full overflow-hidden rounded bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 flex items-center justify-center">
-                  <svg className="h-16 w-16 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
+                <div className="mb-3 h-64 w-full overflow-hidden rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                  {template?.templateImage ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={template.templateImage.startsWith('http') ? template.templateImage : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${template.templateImage}`}
+                      alt={itemName || ''}
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 flex items-center justify-center">
+                      <svg className="h-16 w-16 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                  )}
                 </div>
               )}
               <h4 className="text-lg font-semibold text-black dark:text-white">
@@ -551,10 +531,10 @@ export default function CreateOrderPage() {
               </p>
               <div className="space-y-1 mt-2">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Base cost: <span className="font-medium">{itemPrice?.toFixed(2)} DH</span>
+                  Base cost: <span className="font-medium">{Number(itemPrice || 0).toFixed(2)} DH</span>
                 </p>
                 <p className="text-lg font-bold text-blue-600">
-                  Your price: {formData.selling_price > 0 ? `${formData.selling_price.toFixed(2)} DH` : 'Set price →'}
+                  Your price: {formData.selling_price > 0 ? `${Number(formData.selling_price).toFixed(2)} DH` : 'Set price →'}
                 </p>
               </div>
             </div>
@@ -563,11 +543,11 @@ export default function CreateOrderPage() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Base cost per unit:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">{itemPrice?.toFixed(2)} DH</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{Number(itemPrice || 0).toFixed(2)} DH</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Your price per unit:</span>
-                  <span className="font-medium text-blue-600">{formData.selling_price > 0 ? `${formData.selling_price.toFixed(2)} DH` : 'Not set'}</span>
+                  <span className="font-medium text-blue-600">{formData.selling_price > 0 ? `${Number(formData.selling_price).toFixed(2)} DH` : 'Not set'}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Profit per unit:</span>
@@ -581,12 +561,12 @@ export default function CreateOrderPage() {
                 </div>
                 <div className="flex justify-between items-center text-lg font-bold border-t pt-2">
                   <span className="text-black dark:text-white">Total Revenue:</span>
-                  <span className="text-blue-600">{calculateTotal().toFixed(2)} DH</span>
+                  <span className="text-blue-600">{Number(calculateTotal()).toFixed(2)} DH</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Total Profit:</span>
                   <span className={`font-medium ${calculateProfit() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {calculateProfit() >= 0 ? '+' : ''}{calculateProfit().toFixed(2)} DH
+                    {calculateProfit() >= 0 ? '+' : ''}{Number(calculateProfit()).toFixed(2)} DH
                   </span>
                 </div>
               </div>
@@ -607,8 +587,8 @@ export default function CreateOrderPage() {
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, create_new_customer: false }))}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${!formData.create_new_customer
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                 >
                   Select Existing Customer
@@ -617,8 +597,8 @@ export default function CreateOrderPage() {
                   type="button"
                   onClick={handleNewCustomerToggle}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${formData.create_new_customer
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                 >
                   Create New Customer
@@ -826,13 +806,13 @@ export default function CreateOrderPage() {
                     step="0.01"
                     className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.selling_price ? 'border-red-500' : 'border-stroke'
                       }`}
-                    placeholder={`Min: ${itemPrice?.toFixed(2)} DH`}
+                    placeholder={`Min: ${Number(itemPrice || 0).toFixed(2)} DH`}
                   />
                   {errors.selling_price && (
                     <p className="mt-1 text-sm text-red-500">{errors.selling_price}</p>
                   )}
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Base cost: {itemPrice?.toFixed(2)} DH • Profit: <span className={calculateProfitPerUnit() >= 0 ? 'text-green-600' : 'text-red-600'}>{calculateProfitPerUnit() >= 0 ? '+' : ''}{calculateProfitPerUnit().toFixed(2)} DH</span>
+                    Base cost: {Number(itemPrice || 0).toFixed(2)} DH • Profit: <span className={calculateProfitPerUnit() >= 0 ? 'text-green-600' : 'text-red-600'}>{calculateProfitPerUnit() >= 0 ? '+' : ''}{Number(calculateProfitPerUnit()).toFixed(2)} DH</span>
                   </p>
                 </div>
               </div>

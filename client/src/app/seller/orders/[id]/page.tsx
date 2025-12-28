@@ -59,7 +59,7 @@ export default function OrderDetailPage() {
   const router = useRouter();
   const { user } = useAuth();
   const orderId = params.id as string;
-  
+
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -74,18 +74,18 @@ export default function OrderDetailPage() {
       }
 
       setLoading(true);
-      
+
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const token = localStorage.getItem('token');
-        
+
         const response = await fetch(`${API_URL}/api/seller/orders/${orderId}`, {
           headers: {
             'Accept': 'application/json',
             'Authorization': `Bearer ${token}`
           }
         });
-        
+
         if (response.ok) {
           const result = await response.json();
           console.log('Order Detail API Response:', result); // Debug log
@@ -114,10 +114,10 @@ export default function OrderDetailPage() {
         setLoading(false);
         return;
       }
-      
+
       // If we get here, there was an error with the API
       setLoading(false);
-    };    if (orderId && user) {
+    }; if (orderId && user) {
       fetchOrderDetails();
     }
   }, [orderId, user, router]);
@@ -129,7 +129,7 @@ export default function OrderDetailPage() {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`${API_URL}/api/seller/orders/${orderId}/status`, {
         method: 'PUT',
         headers: {
@@ -142,7 +142,7 @@ export default function OrderDetailPage() {
           notes: `Status updated to ${newStatus}`
         })
       });
-      
+
       if (response.ok) {
         const result = await response.json();
         setOrder(result.data);
@@ -183,7 +183,7 @@ export default function OrderDetailPage() {
       'CANCELLED': [],
       'RETURNED': []
     };
-    
+
     return statusFlow[currentStatus] || [];
   };
 
@@ -231,7 +231,7 @@ export default function OrderDetailPage() {
             {order.status}
           </Badge>
         </div>
-        
+
         {/* Quick Actions */}
         {nextStatuses.length > 0 && (
           <div className="flex gap-3 mt-4">
@@ -255,47 +255,47 @@ export default function OrderDetailPage() {
         {/* Order Information */}
         <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
           <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Order Information</h3>
-          
+
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Order Number:</span>
               <span className="font-medium text-black dark:text-white">{order.order_number}</span>
             </div>
-            
+
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Product:</span>
               <span className="font-medium text-black dark:text-white">{order.product.name}</span>
             </div>
-            
+
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Category:</span>
               <span className="font-medium text-black dark:text-white">{order.product.category}</span>
             </div>
-            
+
             {order.template && (
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Template:</span>
                 <span className="font-medium text-black dark:text-white">{order.template.title}</span>
               </div>
             )}
-            
+
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Quantity:</span>
               <span className="font-medium text-black dark:text-white">{order.quantity}</span>
             </div>
-            
+
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Base Cost per Unit:</span>
               <span className="font-medium text-black dark:text-white">{Number(order.unit_price).toFixed(2)} DH</span>
             </div>
-            
+
             {order.selling_price && (
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Selling Price per Unit:</span>
                 <span className="font-medium text-blue-600">{Number(order.selling_price).toFixed(2)} DH</span>
               </div>
             )}
-            
+
             {order.selling_price && (
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Profit per Unit:</span>
@@ -304,12 +304,12 @@ export default function OrderDetailPage() {
                 </span>
               </div>
             )}
-            
+
             <div className="flex justify-between border-t pt-3">
               <span className="text-lg font-semibold text-black dark:text-white">Total:</span>
               <span className="text-lg font-bold text-blue-600">{Number(order.total_amount).toFixed(2)} DH</span>
             </div>
-            
+
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Order Date:</span>
               <span className="font-medium text-black dark:text-white">
@@ -322,18 +322,18 @@ export default function OrderDetailPage() {
         {/* Customer Information */}
         <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
           <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Customer Information</h3>
-          
+
           <div className="space-y-3">
             <div>
               <span className="text-gray-600 dark:text-gray-400 block">Name:</span>
               <span className="font-medium text-black dark:text-white">{order.customer.name}</span>
             </div>
-            
+
             <div>
               <span className="text-gray-600 dark:text-gray-400 block">Email:</span>
               <span className="font-medium text-black dark:text-white">{order.customer.email}</span>
             </div>
-            
+
             <div>
               <span className="text-gray-600 dark:text-gray-400 block">Phone:</span>
               <span className="font-medium text-black dark:text-white">{order.customer.phone}</span>
@@ -344,18 +344,18 @@ export default function OrderDetailPage() {
         {/* Product Customization */}
         <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
           <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Product Customization</h3>
-          
+
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Color:</span>
               <span className="font-medium text-black dark:text-white">{order.customization.color}</span>
             </div>
-            
+
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Size:</span>
               <span className="font-medium text-black dark:text-white">{order.customization.size}</span>
             </div>
-            
+
             {order.customization.notes && (
               <div>
                 <span className="text-gray-600 dark:text-gray-400 block">Notes:</span>
@@ -368,7 +368,7 @@ export default function OrderDetailPage() {
         {/* Shipping Address */}
         <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
           <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Shipping Address</h3>
-          
+
           <div className="space-y-2">
             <p className="text-black dark:text-white">{order.shipping_address.street}</p>
             <p className="text-black dark:text-white">
@@ -382,7 +382,7 @@ export default function OrderDetailPage() {
       {/* Status History */}
       <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
         <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Status History</h3>
-        
+
         <div className="space-y-4">
           {order.status_history && order.status_history.length > 0 ? (
             order.status_history.map((history) => (
@@ -425,6 +425,48 @@ export default function OrderDetailPage() {
         >
           Back to Orders
         </Button>
+        {order.template && (
+          <Button
+            variant="outline"
+            onClick={async () => {
+              if (!order) return;
+              try {
+                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                const token = localStorage.getItem('token');
+
+                const response = await fetch(`${API_URL}/api/seller/orders/${order.id}/download-assets`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`
+                  }
+                });
+
+                if (response.ok) {
+                  const blob = await response.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `order-${order.order_number}-assets.zip`;
+                  document.body.appendChild(a);
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  document.body.removeChild(a);
+                } else {
+                  alert('Failed to download assets. Please try again later.');
+                  console.error('Download failed:', response.statusText);
+                }
+              } catch (error) {
+                console.error('Error downloading assets:', error);
+                alert('An error occurred while downloading assets.');
+              }
+            }}
+            className="border-green-600 text-green-600 hover:bg-green-50"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Download Assets
+          </Button>
+        )}
         <Button
           onClick={() => window.print()}
           className="bg-gray-600 hover:bg-gray-700"

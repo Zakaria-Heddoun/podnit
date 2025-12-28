@@ -26,7 +26,14 @@ export default function SignInForm() {
     if (token && user) {
       try {
         const userData = JSON.parse(user);
-        const redirectUrl = userData.role === 'admin' ? '/admin/dashboard' : '/seller/dashboard';
+        let redirectUrl = '/dashboard';
+        if (userData.role === 'admin') {
+          redirectUrl = '/admin/dashboard';
+        } else if (userData.role === 'seller') {
+          redirectUrl = '/seller/dashboard';
+        } else if (userData.role_id) {
+          redirectUrl = '/employee/dashboard';
+        }
         router.push(redirectUrl);
       } catch (error) {
         router.push('/dashboard');

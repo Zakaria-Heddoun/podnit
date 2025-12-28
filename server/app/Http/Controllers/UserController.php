@@ -15,6 +15,17 @@ class UserController extends Controller
     public function show(): JsonResponse
     {
         $user = auth()->user();
+        
+        // Load role relationship if user has a role_id
+        if ($user->role_id) {
+            $user->load('roleRelation');
+        }
+        
+        // Get permissions if user has a role
+        $permissions = [];
+        if ($user->roleRelation) {
+            $permissions = $user->roleRelation->permissions ?? [];
+        }
 
         return response()->json([
             'message' => 'User information',
@@ -23,6 +34,7 @@ class UserController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
+                'role_id' => $user->role_id,
                 'phone' => $user->phone,
                 'brand_name' => $user->brand_name,
                 'cin' => $user->cin,
@@ -33,6 +45,7 @@ class UserController extends Controller
                 'referral_code' => $user->referral_code,
                 'referred_by_id' => $user->referred_by_id,
                 'is_verified' => $user->is_verified,
+                'permissions' => $permissions,
                 'created_at' => $user->created_at,
                 'updated_at' => $user->updated_at,
             ]
@@ -137,13 +150,24 @@ class UserController extends Controller
     public function getRedirectUrl(): JsonResponse
     {
         $user = auth()->user();
-        $redirectUrl = $user->isAdmin() ? '/admin/dashboard' : '/seller/dashboard';
+        
+        // Determine redirect URL based on role
+        $redirectUrl = '/dashboard';
+        if ($user->isAdmin()) {
+            $redirectUrl = '/admin/dashboard';
+        } elseif ($user->isSeller()) {
+            $redirectUrl = '/seller/dashboard';
+        } elseif ($user->role_id) {
+            // Employee with custom role
+            $redirectUrl = '/employee/dashboard';
+        }
 
         return response()->json([
             'message' => 'Dashboard URL',
             'data' => [
                 'redirect_url' => $redirectUrl,
-                'role' => $user->role
+                'role' => $user->role,
+                'role_id' => $user->role_id
             ]
         ]);
     }

@@ -170,6 +170,10 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
 
   // Canvas event handlers
   const handleCanvasReady = useCallback((canvas: any) => {
+    console.log('=== CANVAS READY ===');
+    console.log('Current area:', currentArea);
+    console.log('Canvas states available:', Object.keys(canvasStates));
+
     canvasRef.current = canvas;
 
     // Add listener for text changes
@@ -180,6 +184,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
     // Load the current area's state if it exists
     const currentState = canvasStates[currentArea];
     if (currentState) {
+      console.log('Loading saved state for', currentArea);
       canvas.loadFromJSON(currentState, () => {
         canvas.renderAll();
         // Force a second render to ensure visibility
@@ -188,6 +193,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
         }, 10);
       });
     } else {
+      console.log('No saved state, initializing empty canvas for', currentArea);
       // Save initial empty state for new area
       const initialState = JSON.stringify(canvas.toJSON());
       setCanvasStates(prev => ({
@@ -203,7 +209,8 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
         [currentArea]: 0
       }));
     }
-  }, [currentArea, canvasStates, saveCanvasState]);
+    console.log('=== END CANVAS READY ===');
+  }, [currentArea, saveCanvasState]); // REMOVED canvasStates dependency!
 
   const handleSelectionChange = useCallback((element: any) => {
     setSelectedElement(element);
@@ -293,47 +300,90 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
     const reader = new FileReader();
     reader.onload = (e) => {
       const canvas = canvasRef?.current;
+      if (!canvas) {
+        console.error('Canvas ref is null during image load');
+        return;
+      }
+
       const img = new Image();
       img.onload = () => {
+        console.log('=== IMAGE UPLOAD DEBUG ===');
+        console.log('Current area:', currentArea);
+
         const isSmall = currentArea === 'small-front';
-        const canvasWidth = isSmall ? 176 : 220;
-        const canvasHeight = isSmall ? 96 : 270;
+        const areaWidth = isSmall ? 176 : 220; // Actual printable area
+        const areaHeight = isSmall ? 96 : 270;
+        const PADDING = 60;
+
+        // Canvas is now larger than area
+        const canvasWidth = areaWidth + (PADDING * 2);
+        const canvasHeight = areaHeight + (PADDING * 2);
+
+        console.log('Calculated dimensions:', { canvasWidth, canvasHeight, areaWidth, areaHeight });
+
+        // Calculate scale to fit image within printable area (max 80% coverage)
+        const maxScaleX = (areaWidth * 0.8) / img.width;
+        const maxScaleY = (areaHeight * 0.8) / img.height;
+        const scale = Math.min(maxScaleX, maxScaleY);
+
+        // Center of the printable area (PADDING + area/2)
+        const centerX = PADDING + (areaWidth / 2);
+        const centerY = PADDING + (areaHeight / 2);
 
         const fabricImg = new fabric.FabricImage(img, {
-          left: canvasWidth / 2,
-          top: canvasHeight / 2,
+          left: centerX,
+          top: centerY,
           originX: 'center',
           originY: 'center',
-          scaleX: isSmall ? 0.2 : 0.5,
-          scaleY: isSmall ? 0.2 : 0.5,
+          scaleX: scale,
+          scaleY: scale,
           selectable: true
         });
+
+        console.log('Created FabricImage at position:', { left: fabricImg.left, top: fabricImg.top });
+        console.log('Image scale:', { scaleX: fabricImg.scaleX, scaleY: fabricImg.scaleY });
+        console.log('Objects on canvas before add:', canvas.getObjects().length);
+
         canvas?.add(fabricImg);
+        console.log('Objects on canvas after add:', canvas.getObjects().length);
+
         canvas?.setActiveObject(fabricImg);
         canvas?.renderAll();
+
+        console.log('Canvas rendered, active object:', canvas.getActiveObject());
+
         // Force a second render to ensure visibility
         setTimeout(() => {
           canvas?.renderAll();
+          console.log('Second render complete');
+          console.log('Objects still on canvas:', canvas.getObjects().length);
         }, 10);
         // Save state after adding image
         saveCanvasState();
+        console.log('=== END IMAGE UPLOAD DEBUG ===');
       };
       img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
-  }, [saveCanvasState]);
+  }, [currentArea, saveCanvasState]);
 
   const handleAddText = useCallback(() => {
     if (!canvasRef?.current) return;
 
     const canvas = canvasRef?.current;
     const isSmall = currentArea === 'small-front';
-    const canvasWidth = isSmall ? 176 : 220;
-    const canvasHeight = isSmall ? 96 : 270;
+    const areaWidth = isSmall ? 176 : 220;
+    const areaHeight = isSmall ? 96 : 270;
+    const PADDING = 60;
+
+    // Canvas dimensions are now larger, but we position relative to printable area
+    // Center of the printable area
+    const centerX = PADDING + (areaWidth / 2);
+    const centerY = PADDING + (areaHeight / 2);
 
     const text = new fabric.Textbox('PODTEXT', {
-      left: canvasWidth / 2,
-      top: canvasHeight / 2,
+      left: centerX,
+      top: centerY,
       originX: 'center',
       originY: 'center',
       fontFamily: 'Arial',

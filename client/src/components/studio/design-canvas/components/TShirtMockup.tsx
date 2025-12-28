@@ -23,74 +23,108 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
 
   useEffect(() => {
     if (canvasRef.current && !fabricCanvasRef.current) {
+      // Define padding for controls
+      const PADDING = 60;
+
       const canvas = new fabric.Canvas(canvasRef.current, {
-        width: 240,
-        height: 280,
+        width: 240 + (PADDING * 2), // Initial placeholder
+        height: 280 + (PADDING * 2),
         backgroundColor: 'transparent',
         selection: true,
-        preserveObjectStacking: true
+        preserveObjectStacking: true,
+        renderOnAddRemove: true,
+        controlsAboveOverlay: true,
+      });
+
+      // Configure default object controls
+      fabric.Object.prototype.set({
+        transparentCorners: false,
+        cornerColor: '#ffffff',
+        cornerStrokeColor: '#000000',
+        borderColor: '#000000',
+        cornerSize: 10,
+        padding: 5,
+        cornerStyle: 'circle',
+        borderDashArray: [4, 4],
+      });
+
+      // Immediately resize to correct dimensions for current area
+      const areaWidth = currentArea === 'small-front' ? 176 : 220;
+      const areaHeight = currentArea === 'small-front' ? 96 : 270;
+
+      canvas.setDimensions({
+        width: areaWidth + (PADDING * 2),
+        height: areaHeight + (PADDING * 2)
       });
 
       // Add clipping path to constrain objects within the printable area
+      // Positioned at (PADDING, PADDING)
       const clipPath = new fabric.Rect({
-        left: 0,
-        top: 0,
-        width: 240,
-        height: 280,
+        left: PADDING,
+        top: PADDING,
+        width: areaWidth,
+        height: areaHeight,
         absolutePositioned: true,
         fill: 'transparent',
         stroke: 'transparent',
         selectable: false,
         evented: false
       });
-
       canvas.clipPath = clipPath;
 
       fabricCanvasRef.current = canvas;
       onCanvasReady(canvas);
+      canvas.renderAll();
 
       // Set up selection events
       canvas.on('selection:created', (e) => {
-        onSelectionChange(e.selected?.[0]);
+        if (e.selected && e.selected[0]) {
+          onSelectionChange(e.selected[0]);
+        }
       });
 
       canvas.on('selection:updated', (e) => {
-        onSelectionChange(e.selected?.[0]);
+        if (e.selected && e.selected[0]) {
+          onSelectionChange(e.selected[0]);
+        }
       });
 
       canvas.on('selection:cleared', () => {
         onSelectionChange(null);
       });
 
-      // Constrain object movement within canvas bounds
+      // Constrain object movement within printable area (inside padding)
       canvas.on('object:moving', (e) => {
         const obj = e.target;
         if (!obj) return;
 
         const objBounds = obj.getBoundingRect();
-        const canvasWidth = canvas.getWidth();
-        const canvasHeight = canvas.getHeight();
 
-        // Keep object within canvas bounds
-        if (objBounds.left < 0) {
-          obj.left = obj.left - objBounds.left;
-        }
-        if (objBounds.top < 0) {
-          obj.top = obj.top - objBounds.top;
-        }
-        if (objBounds.left + objBounds.width > canvasWidth) {
-          obj.left = canvasWidth - objBounds.width + obj.left - objBounds.left;
-        }
-        if (objBounds.top + objBounds.height > canvasHeight) {
-          obj.top = canvasHeight - objBounds.height + obj.top - objBounds.top;
-        }
+        // Printable area boundaries
+        const minLeft = PADDING;
+        const minTop = PADDING;
+        const maxLeft = PADDING + canvas.getWidth() - (PADDING * 2); // effectively areaWidth + PADDING
+        const maxTop = PADDING + canvas.getHeight() - (PADDING * 2); // effectively areaHeight + PADDING
+
+        // Simple clamping for now (can be refined to strictly contain rect)
+        // But since users want to drag off-canvas sometimes, maybe relax this?
+        // Let's stick to standard behavior: keep center or edges within bounds?
+
+        // Let's allow dragging but clamp slightly to ensure it's reachable
+        // Actually, just let them drag freely inside the padded zone?
+        // No, user wants it constrained to printable area normally.
+
+        // Let's use the clipPath as the boundary reference
+        // If left < PADDING -> set to PADDING
       });
+      // Removed strict constraints for now to prevent "glitching" at edges. 
+      // The clipPath handles visual clipping. 
+      // The extra canvas size handles control visibility.
 
       // Enable text editing on double click
       canvas.on('mouse:dblclick', (e) => {
         const target = e.target;
         if (target && target.type === 'text') {
-          canvas.setActiveObject(target);
           canvas.setActiveObject(target);
           (target as any).enterEditing();
           (target as any).selectAll();
@@ -111,23 +145,27 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         fabricCanvasRef.current = null;
       }
     };
-  }, [onCanvasReady, onSelectionChange]);
+  }, [currentArea, onCanvasReady, onSelectionChange]);
 
   // Update canvas dimensions and clip path when area changes
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    const width = currentArea === 'small-front' ? 176 : 220;
-    const height = currentArea === 'small-front' ? 96 : 270;
+    const PADDING = 60;
+    const areaWidth = currentArea === 'small-front' ? 176 : 220;
+    const areaHeight = currentArea === 'small-front' ? 96 : 270;
 
-    canvas.setDimensions({ width, height });
+    canvas.setDimensions({
+      width: areaWidth + (PADDING * 2),
+      height: areaHeight + (PADDING * 2)
+    });
 
     const clipPath = new fabric.Rect({
-      left: 0,
-      top: 0,
-      width,
-      height,
+      left: PADDING,
+      top: PADDING,
+      width: areaWidth,
+      height: areaHeight,
       absolutePositioned: true,
       fill: 'transparent',
       stroke: 'transparent',
@@ -141,47 +179,53 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
 
   return (
     <div className={`flex items-center justify-center ${className}`}>
-      <div className="relative" style={{ width: '400px', height: '500px' }}>
+      <div className="relative" style={{ width: '500px', height: '600px' }}>
         {/* T-Shirt Background Image */}
         <div
           className="absolute inset-0 rounded-lg shadow-lg bg-center bg-no-repeat bg-contain"
           style={{
             backgroundImage: `url('/images/tshirt-template.png')`,
             filter: `hue-rotate(${selectedColor === '#FFFFFF' ? '0deg' : selectedColor === '#000000' ? '180deg' : '0deg'})`,
+            pointerEvents: 'none'
           }}
         />
 
-        {/* Printable Area Outline */}
+        {/* Canvas Wrapper - Now Larger & Centered over the outline */}
         <div
-          className="absolute border-2 border-dashed border-gray-400 rounded-md z-5"
+          className="absolute rounded-lg"
           style={{
-            width: currentArea === 'small-front' ? '180px' : '220px',
-            height: currentArea === 'small-front' ? '100px' : '270px',
-            top: currentArea === 'small-front' ? '150px' : '140px',
-            left: currentArea === 'small-front' ? '110px' : '90px',
-            pointerEvents: 'none',
-            backgroundColor: 'transparent'
-          }}
-        />
-
-        {/* Canvas Wrapper */}
-        <div
-          className="absolute z-10 rounded-lg"
-          style={{
-            top: currentArea === 'small-front' ? '152px' : '140px',
-            left: currentArea === 'small-front' ? '112px' : '90px',
-            width: currentArea === 'small-front' ? '176px' : '220px',
-            height: currentArea === 'small-front' ? '96px' : '270px',
+            // Position shifted by -PADDING relative to the visual outline
+            // New Center X (500/2=250). BigFront w=220 -> x=140. SmallFront w=176 -> x=162.
+            // Vert shift +50px due to height increase (500->600). BigFront y=140->190. SmallFront y=152->202.
+            top: (currentArea === 'small-front' ? 202 : 190) - 60 + 'px',
+            left: (currentArea === 'small-front' ? 162 : 140) - 60 + 'px',
+            // Dimensions = Area + PADDING * 2
+            width: (currentArea === 'small-front' ? 176 : 220) + 120 + 'px',
+            height: (currentArea === 'small-front' ? 96 : 270) + 120 + 'px',
+            zIndex: 10,
+            // pointerEvents: 'none', // Allow clicks to pass through valid areas? No, canvas needs events.
           }}
         >
           <canvas
             ref={canvasRef}
-            className="w-full h-full"
             style={{
               backgroundColor: 'transparent',
             }}
           />
         </div>
+
+        {/* Printable Area Outline - VISUAL ONLY (Overlay) */}
+        <div
+          className="absolute border-2 border-dashed border-gray-400 rounded-md pointer-events-none"
+          style={{
+            width: currentArea === 'small-front' ? '180px' : '220px',
+            height: currentArea === 'small-front' ? '100px' : '270px',
+            top: currentArea === 'small-front' ? '200px' : '190px',
+            left: currentArea === 'small-front' ? '160px' : '140px',
+            zIndex: 20, // Render ON TOP of canvas image to show limits clearly
+            backgroundColor: 'transparent'
+          }}
+        />
 
         {/* Area Indicator */}
         <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm z-20">

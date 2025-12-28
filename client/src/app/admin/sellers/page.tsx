@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import SellerDataTable from "@/components/DataTables/SellerDataTable";
+import SellerPriceConfigModal from "@/components/admin/sellers/SellerPriceConfigModal";
 import { Seller } from "@/types/datatable";
 
 export default function AdminSellersPage() {
@@ -12,6 +13,7 @@ export default function AdminSellersPage() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingSeller, setEditingSeller] = useState<Seller | null>(null);
+  const [priceConfigSeller, setPriceConfigSeller] = useState<Seller | null>(null);
   const [editForm, setEditForm] = useState<Partial<Seller> & { password?: string }>({});
 
   useEffect(() => {
@@ -125,6 +127,7 @@ export default function AdminSellersPage() {
         data={sellers}
         onEdit={handleEditClick}
         onToggleStatus={handleActivate}
+        onManagePrices={(seller) => setPriceConfigSeller(seller)}
       />
 
       {/* Edit Seller Modal */}
@@ -180,6 +183,15 @@ export default function AdminSellersPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {/* Seller Price Config Modal */}
+      {priceConfigSeller && (
+        <SellerPriceConfigModal
+          isOpen={!!priceConfigSeller}
+          onClose={() => setPriceConfigSeller(null)}
+          seller={priceConfigSeller}
+        />
       )}
     </div>
   );

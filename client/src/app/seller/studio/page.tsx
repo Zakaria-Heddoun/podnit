@@ -68,48 +68,127 @@ function StudioContent() {
     setIsSaving(true);
     try {
       const designData = await canvasRef.current.getDesignData();
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const token = localStorage.getItem('token');
 
-      // Prepare payload with ALL design sides
+      // Step 1: Upload images separately to avoid large payload
+      console.log('📤 Step 1: Uploading images separately...');
+      const imageTypes = [
+        { key: 'big-front', data: designData.images['big-front'] },
+        { key: 'small-front', data: designData.images['small-front'] },
+        { key: 'back', data: designData.images.back },
+        { key: 'left-sleeve', data: designData.images.left },
+        { key: 'right-sleeve', data: designData.images.right },
+      ];
+
+      const imageUrls: Record<string, string> = {};
+
+      // Upload each image separately (only if it's base64, skip if already a URL)
+      for (const { key, data } of imageTypes) {
+        if (!data) continue;
+        
+        // If it's already a URL, use it directly
+        if (typeof data === 'string' && !data.startsWith('data:')) {
+          imageUrls[key] = data;
+          continue;
+        }
+
+        // Upload base64 image
+        try {
+          const uploadResponse = await fetch(`${API_URL}/api/seller/templates/upload-image`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              image: data,
+              type: key
+            })
+          });
+
+          if (uploadResponse.ok) {
+            const uploadResult = await uploadResponse.json();
+            imageUrls[key] = uploadResult.url;
+            console.log(`✅ Uploaded ${key}:`, uploadResult.url);
+          } else {
+            console.warn(`⚠️ Failed to upload ${key}, will try to process in template creation`);
+            // Fallback: will be processed in template creation
+            imageUrls[key] = data;
+          }
+        } catch (error) {
+          console.warn(`⚠️ Error uploading ${key}:`, error);
+          // Fallback: will be processed in template creation
+          imageUrls[key] = data;
+        }
+      }
+
+      // Step 2: Create template with image URLs (much smaller payload)
+      console.log('📤 Step 2: Creating template with image URLs...');
       const payload = {
         title: name,
         product_id: 1,
         design_config: JSON.stringify(designData.designConfig),
-        big_front_image: designData.images['big-front'],
-        small_front_image: designData.images['small-front'],
-        back_image: designData.images.back,
-        left_sleeve_image: designData.images.left,
-        right_sleeve_image: designData.images.right,
+        big_front_image: imageUrls['big-front'] || null,
+        small_front_image: imageUrls['small-front'] || null,
+        back_image: imageUrls['back'] || null,
+        left_sleeve_image: imageUrls['left-sleeve'] || null,
+        right_sleeve_image: imageUrls['right-sleeve'] || null,
         colors: [designData.designConfig.color],
       };
 
       const url = templateId
-        ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/seller/templates/${templateId}`
-        : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/seller/templates`;
+        ? `${API_URL}/api/seller/templates/${templateId}`
+        : `${API_URL}/api/seller/templates`;
 
       const method = templateId ? 'PUT' : 'POST';
 
+      console.log('📤 Creating template:', { url, method, payloadSize: JSON.stringify(payload).length });
+      
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(payload)
       });
 
+      console.log('📡 Response status:', response.status, response.statusText);
+
       if (!response.ok) {
-        throw new Error('Failed to save template');
+        const errorText = await response.text();
+        console.error('❌ Error response:', errorText);
+        
+        let errorMessage = 'Failed to save template';
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || errorJson.error || errorMessage;
+          if (errorJson.errors) {
+            // Handle validation errors
+            const validationErrors = Object.entries(errorJson.errors)
+              .map(([key, value]: [string, any]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+              .join('\n');
+            errorMessage = validationErrors || errorMessage;
+          }
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
-      console.log('Template saved:', result);
+      console.log('✅ Template saved:', result);
 
       setIsModalOpen(false);
       router.push('/seller/templates');
-    } catch (error) {
-      console.error('Error saving template:', error);
-      alert('Failed to save template. Please try again.');
+    } catch (error: any) {
+      console.error('❌ Error saving template:', error);
+      const errorMessage = error?.message || 'Failed to save template. Please try again.';
+      alert(errorMessage);
     } finally {
       setIsSaving(false);
     }
