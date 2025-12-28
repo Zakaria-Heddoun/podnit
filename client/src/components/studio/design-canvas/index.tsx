@@ -122,24 +122,43 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
         };
         setCanvasStates(updatedStates);
 
-        // Use PNG with multiplier 1 for high quality (same as export button)
-        const exportOptions = { format: 'png', multiplier: 1 };
+        const exportOptions = { format: 'png', multiplier: 4 };
 
-        // Simply export the CURRENT canvas - this is what the user is seeing
-        const currentImage = canvasRef.current.toDataURL(exportOptions);
+        // Export all areas based on saved states
+        const images: Record<string, string | null> = {};
+        const originalState = currentJson;
 
-        // Map the current area to the correct image field
-        const images = {
-          ...areaKeys.reduce((acc, key) => {
-            acc[key] = key === currentArea ? currentImage : null;
-            return acc;
-          }, {} as Record<string, string | null>)
-        };
+        const loadState = (canvasObj: any, json: string) =>
+          new Promise<void>((resolve, reject) => {
+            canvasObj.loadFromJSON(json, () => {
+              canvasObj.renderAll();
+              resolve();
+            }, (err: any) => reject(err));
+          });
+
+        for (const key of areaKeys) {
+          const state = updatedStates[key];
+          if (!state) {
+            images[key] = null;
+            continue;
+          }
+          try {
+            await loadState(canvasRef.current, state);
+            images[key] = canvasRef.current.toDataURL(exportOptions);
+          } catch (e) {
+            console.error('Error exporting state', key, e);
+            images[key] = null;
+          }
+        }
+
+        // Restore original state for current area
+        await loadState(canvasRef.current, originalState);
 
         return {
           designConfig: {
             states: updatedStates,
             color: selectedColor,
+            views: views?.map(v => ({ key: v.key, name: v.name, area: v.area })),
           },
           images
         };
@@ -150,6 +169,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
         designConfig: {
           states: canvasStates,
           color: selectedColor,
+          views: views?.map(v => ({ key: v.key, name: v.name, area: v.area })),
         },
         images: areaKeys.reduce((acc, key) => { acc[key] = null; return acc; }, {} as Record<string, string | null>)
       };
@@ -354,30 +374,16 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
         return;
       }
 
+      const areaWidth = canvas.getWidth();
+      const areaHeight = canvas.getHeight();
+      const centerX = areaWidth / 2;
+      const centerY = areaHeight / 2;
+
       const img = new Image();
       img.onload = () => {
-        console.log('=== IMAGE UPLOAD DEBUG ===');
-        console.log('Current area:', currentArea);
-
-        const isSmall = currentArea === 'small-front';
-        const areaWidth = isSmall ? 176 : 220; // Actual printable area
-        const areaHeight = isSmall ? 96 : 270;
-        const PADDING = 60;
-
-        // Canvas is now larger than area
-        const canvasWidth = areaWidth + (PADDING * 2);
-        const canvasHeight = areaHeight + (PADDING * 2);
-
-        console.log('Calculated dimensions:', { canvasWidth, canvasHeight, areaWidth, areaHeight });
-
-        // Calculate scale to fit image within printable area (max 80% coverage)
         const maxScaleX = (areaWidth * 0.8) / img.width;
         const maxScaleY = (areaHeight * 0.8) / img.height;
-        const scale = Math.min(maxScaleX, maxScaleY);
-
-        // Center of the printable area (PADDING + area/2)
-        const centerX = PADDING + (areaWidth / 2);
-        const centerY = PADDING + (areaHeight / 2);
+        const scale = Math.min(maxScaleX, maxScaleY, 1);
 
         const fabricImg = new fabric.FabricImage(img, {
           left: centerX,
@@ -389,46 +395,28 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
           selectable: true
         });
 
-        console.log('Created FabricImage at position:', { left: fabricImg.left, top: fabricImg.top });
-        console.log('Image scale:', { scaleX: fabricImg.scaleX, scaleY: fabricImg.scaleY });
-        console.log('Objects on canvas before add:', canvas.getObjects().length);
+        canvas.add(fabricImg);
+        canvas.setActiveObject(fabricImg);
+        canvas.renderAll();
 
-        canvas?.add(fabricImg);
-        console.log('Objects on canvas after add:', canvas.getObjects().length);
-
-        canvas?.setActiveObject(fabricImg);
-        canvas?.renderAll();
-
-        console.log('Canvas rendered, active object:', canvas.getActiveObject());
-
-        // Force a second render to ensure visibility
         setTimeout(() => {
-          canvas?.renderAll();
-          console.log('Second render complete');
-          console.log('Objects still on canvas:', canvas.getObjects().length);
+          canvas.renderAll();
         }, 10);
-        // Save state after adding image
         saveCanvasState();
-        console.log('=== END IMAGE UPLOAD DEBUG ===');
       };
       img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
-  }, [currentArea, saveCanvasState]);
+  }, [saveCanvasState]);
 
   const handleAddText = useCallback(() => {
     if (!canvasRef?.current) return;
 
     const canvas = canvasRef?.current;
-    const isSmall = currentArea === 'small-front';
-    const areaWidth = isSmall ? 176 : 220;
-    const areaHeight = isSmall ? 96 : 270;
-    const PADDING = 60;
-
-    // Canvas dimensions are now larger, but we position relative to printable area
-    // Center of the printable area
-    const centerX = PADDING + (areaWidth / 2);
-    const centerY = PADDING + (areaHeight / 2);
+    const areaWidth = canvas.getWidth();
+    const areaHeight = canvas.getHeight();
+    const centerX = areaWidth / 2;
+    const centerY = areaHeight / 2;
 
     const text = new fabric.Textbox('PODTEXT', {
       left: centerX,
@@ -436,21 +424,19 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
       originX: 'center',
       originY: 'center',
       fontFamily: 'Arial',
-      fontSize: isSmall ? 16 : 24,
+      fontSize: Math.max(16, Math.min(32, areaWidth / 8)),
       fill: '#FFFFFF',
       selectable: true,
       editable: true,
-      width: isSmall ? 80 : 140,
+      width: Math.max(80, areaWidth * 0.5),
       splitByGrapheme: false
     });
-    canvas?.add(text);
-    canvas?.setActiveObject(text);
-    canvas?.renderAll();
-    // Force a second render to ensure visibility
+    canvas.add(text);
+    canvas.setActiveObject(text);
+    canvas.renderAll();
     setTimeout(() => {
-      canvas?.renderAll();
+      canvas.renderAll();
     }, 10);
-    // Save state after adding text
     saveCanvasState();
   }, [saveCanvasState]);
 

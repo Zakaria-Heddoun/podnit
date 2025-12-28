@@ -111,34 +111,6 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         onSelectionChange(null);
       });
 
-      // Constrain object movement within printable area (inside padding)
-      canvas.on('object:moving', (e) => {
-        const obj = e.target;
-        if (!obj) return;
-
-        const objBounds = obj.getBoundingRect();
-
-        // Printable area boundaries
-        const minLeft = PADDING;
-        const minTop = PADDING;
-        const maxLeft = PADDING + canvas.getWidth() - (PADDING * 2); // effectively areaWidth + PADDING
-        const maxTop = PADDING + canvas.getHeight() - (PADDING * 2); // effectively areaHeight + PADDING
-
-        // Simple clamping for now (can be refined to strictly contain rect)
-        // But since users want to drag off-canvas sometimes, maybe relax this?
-        // Let's stick to standard behavior: keep center or edges within bounds?
-
-        // Let's allow dragging but clamp slightly to ensure it's reachable
-        // Actually, just let them drag freely inside the padded zone?
-        // No, user wants it constrained to printable area normally.
-
-        // Let's use the clipPath as the boundary reference
-        // If left < PADDING -> set to PADDING
-      });
-      // Removed strict constraints for now to prevent "glitching" at edges. 
-      // The clipPath handles visual clipping. 
-      // The extra canvas size handles control visibility.
-
       // Enable text editing on double click
       canvas.on('mouse:dblclick', (e) => {
         const target = e.target;

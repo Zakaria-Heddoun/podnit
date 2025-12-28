@@ -173,12 +173,13 @@ function StudioContent() {
 
       // Step 1: Upload images separately to avoid large payload
       console.log('📤 Step 1: Uploading images separately...');
+      const firstImage = Object.values(designData.images).find(Boolean) as string | null;
       const imageTypes = [
-        { key: 'big-front', data: designData.images['big-front'] },
-        { key: 'small-front', data: designData.images['small-front'] },
-        { key: 'back', data: designData.images.back },
-        { key: 'left-sleeve', data: designData.images.left },
-        { key: 'right-sleeve', data: designData.images.right },
+        { key: 'big-front', data: designData.images['big-front'] || firstImage },
+        { key: 'small-front', data: designData.images['small-front'] || null },
+        { key: 'back', data: designData.images.back || null },
+        { key: 'left-sleeve', data: designData.images.left || null },
+        { key: 'right-sleeve', data: designData.images.right || null },
       ];
 
       const imageUrls: Record<string, string> = {};

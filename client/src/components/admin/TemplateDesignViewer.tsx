@@ -119,7 +119,7 @@ export function TemplateDesignViewer({ isOpen, onClose, template }: TemplateDesi
 
         const dataURL = design.canvas.toDataURL({
             format: 'png',
-            multiplier: 2,
+            multiplier: 4,
         });
 
         const link = document.createElement('a');
