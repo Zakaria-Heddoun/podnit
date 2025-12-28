@@ -3,13 +3,13 @@
 import React, { useState, useEffect } from "react";
 import ProductDataTable, { ProductDataItem } from "@/components/DataTables/ProductDataTable";
 import { useAuth } from "@/context/AuthContext";
-import { EditProductModal } from "@/components/admin/EditProductModal";
+import { useRouter } from "next/navigation";
 
 export default function AdminProductsPage() {
   const { token } = useAuth();
+  const router = useRouter();
   const [products, setProducts] = useState<ProductDataItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingProduct, setEditingProduct] = useState<ProductDataItem | null>(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -143,53 +143,7 @@ export default function AdminProductsPage() {
   };
 
   const handleEditProduct = (product: ProductDataItem) => {
-    setEditingProduct(product);
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleSaveProduct = async (id: number, data: any) => {
-    if (!token) return;
-
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${API_URL}/api/admin/products/${id}`, {
-        method: "PUT",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(data)
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        // Update the product in the list
-        setProducts(prev => prev.map(p => {
-          if (p.id === id) {
-            let imageUrl = result.data.image_url;
-            if (imageUrl && imageUrl.startsWith('/')) {
-              imageUrl = `${API_URL}${imageUrl}`;
-            } else if (!imageUrl) {
-              imageUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23f3f4f6' width='100' height='100'/%3E%3Ctext fill='%239ca3af' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
-            }
-            return {
-              ...p,
-              name: result.data.name,
-              price: `$${parseFloat(result.data.base_price).toFixed(2)}`,
-              image: imageUrl
-            };
-          }
-          return p;
-        }));
-        setEditingProduct(null);
-      } else {
-        const errorText = await response.text();
-        console.error("Failed to update product:", response.status, errorText);
-      }
-    } catch (error) {
-      console.error("Error updating product:", error);
-    }
+    router.push(`/admin/products/${product.id}/edit`);
   };
 
   return (
@@ -198,7 +152,10 @@ export default function AdminProductsPage() {
         <h2 className="text-title-md2 font-semibold text-black dark:text-white">
           Products
         </h2>
-        <button className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-center font-medium text-white hover:bg-opacity-90">
+        <button
+          onClick={() => router.push("/admin/products/new")}
+          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-center font-medium text-white hover:bg-opacity-90"
+        >
           Add Product
         </button>
       </div>
@@ -214,13 +171,6 @@ export default function AdminProductsPage() {
           onEdit={handleEditProduct}
         />
       )}
-
-      <EditProductModal
-        isOpen={!!editingProduct}
-        onClose={() => setEditingProduct(null)}
-        product={editingProduct}
-        onSave={handleSaveProduct}
-      />
     </div>
   );
 }

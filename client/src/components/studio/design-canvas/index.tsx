@@ -10,13 +10,7 @@ import FloatingToolbar from './components/FloatingToolbar';
 export interface DesignCanvasRef {
   getDesignData: () => Promise<{
     designConfig: any;
-    images: {
-      'big-front': string | null;
-      'small-front': string | null;
-      back: string | null;
-      left: string | null;
-      right: string | null;
-    };
+    images: Record<string, string | null>;
   }>;
   loadDesignData: (designConfig: any) => void;
 }
@@ -24,6 +18,9 @@ export interface DesignCanvasRef {
 interface DesignCanvasProps {
   readOnly?: boolean;
   availableColors?: string[];
+  mockups?: Record<string, string | null>;
+  printAreas?: Record<string, { x: number; y: number; width: number; height: number }>;
+  views?: { key: string; name: string; mockup?: string | null; area?: { x: number; y: number; width: number; height: number } }[];
 }
 
 const fallbackColors = [
@@ -37,40 +34,76 @@ const fallbackColors = [
   '#00FFFF',
 ];
 
-const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ readOnly = false, availableColors: incomingColors }, ref) => {
-  const [currentArea, setCurrentArea] = useState('big-front');
+const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ readOnly = false, availableColors: incomingColors, mockups, printAreas, views }, ref) => {
+  const areaKeys = React.useMemo(() => {
+    if (views && views.length > 0) return views.map(v => v.key);
+    return ['big-front', 'small-front', 'back', 'left', 'right'];
+  }, [views]);
+  const areaDisplay = React.useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    if (views && views.length > 0) {
+      views.forEach(v => { map[v.key] = v.name || v.key; });
+    } else {
+      map['big-front'] = 'Big Front';
+      map['small-front'] = 'Small Front';
+      map['back'] = 'Back';
+      map['left'] = 'Left';
+      map['right'] = 'Right';
+    }
+    return map;
+  }, [views]);
+
+  const [currentArea, setCurrentArea] = useState(areaKeys[0] || 'big-front');
   const resolvedColors = incomingColors && incomingColors.length > 0 ? incomingColors : fallbackColors;
   const [selectedColor, setSelectedColor] = useState(resolvedColors[0] || '#FFFFFF');
   const [selectedElement, setSelectedElement] = useState<any>(null);
   const [availableColors, setAvailableColors] = useState<string[]>(resolvedColors);
+  const effectivePrintAreas = React.useMemo(() => {
+    const map: Record<string, { x: number; y: number; width: number; height: number }> = {};
+    if (printAreas) {
+      Object.assign(map, printAreas);
+    }
+    if (views) {
+      views.forEach(v => {
+        if (v.area) {
+          map[v.key] = v.area;
+        }
+      });
+    }
+    return map;
+  }, [printAreas, views]);
 
-  // Separate canvas states for each side
-  const [canvasStates, setCanvasStates] = useState<{ [key: string]: string }>({
-    'big-front': '',
-    'small-front': '',
-    back: '',
-    left: '',
-    right: ''
-  });
+  // Separate canvas states for each side (dynamic)
+  const initStates = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    areaKeys.forEach(k => { map[k] = ''; });
+    return map;
+  }, [areaKeys]);
 
-  // Separate history for each side
-  const [canvasHistories, setCanvasHistories] = useState<{ [key: string]: string[] }>({
-    'big-front': [],
-    'small-front': [],
-    back: [],
-    left: [],
-    right: []
-  });
+  const initHistories = React.useMemo(() => {
+    const map: Record<string, string[]> = {};
+    areaKeys.forEach(k => { map[k] = []; });
+    return map;
+  }, [areaKeys]);
 
-  const [historyIndices, setHistoryIndices] = useState<{ [key: string]: number }>({
-    'big-front': -1,
-    'small-front': -1,
-    back: -1,
-    left: -1,
-    right: -1
-  });
+  const initHistoryIdx = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    areaKeys.forEach(k => { map[k] = -1; });
+    return map;
+  }, [areaKeys]);
+
+  const [canvasStates, setCanvasStates] = useState<{ [key: string]: string }>(initStates);
+  const [canvasHistories, setCanvasHistories] = useState<{ [key: string]: string[] }>(initHistories);
+  const [historyIndices, setHistoryIndices] = useState<{ [key: string]: number }>(initHistoryIdx);
 
   const canvasRef = useRef<any>(null);
+
+  useEffect(() => {
+    setCurrentArea(areaKeys[0] || 'big-front');
+    setCanvasStates(initStates);
+    setCanvasHistories(initHistories);
+    setHistoryIndices(initHistoryIdx);
+  }, [areaKeys, initHistories, initHistoryIdx, initStates]);
 
   useEffect(() => {
     const nextColors = incomingColors && incomingColors.length > 0 ? incomingColors : fallbackColors;
@@ -97,11 +130,10 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
 
         // Map the current area to the correct image field
         const images = {
-          'big-front': currentArea === 'big-front' ? currentImage : null,
-          'small-front': currentArea === 'small-front' ? currentImage : null,
-          back: currentArea === 'back' ? currentImage : null,
-          left: currentArea === 'left' ? currentImage : null,
-          right: currentArea === 'right' ? currentImage : null,
+          ...areaKeys.reduce((acc, key) => {
+            acc[key] = key === currentArea ? currentImage : null;
+            return acc;
+          }, {} as Record<string, string | null>)
         };
 
         return {
@@ -119,13 +151,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
           states: canvasStates,
           color: selectedColor,
         },
-        images: {
-          'big-front': null,
-          'small-front': null,
-          back: null,
-          left: null,
-          right: null,
-        }
+        images: areaKeys.reduce((acc, key) => { acc[key] = null; return acc; }, {} as Record<string, string | null>)
       };
     },
     loadDesignData: (designConfig: any) => {
@@ -588,7 +614,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
           {/* Design Area Tabs */}
           <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
             <div className="flex justify-center space-x-1">
-              {['big-front', 'small-front', 'back', 'left', 'right'].map((area) => (
+              {areaKeys.map((area) => (
                 <button
                   key={area}
                   onClick={() => handleAreaChange(area)}
@@ -597,7 +623,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                 >
-                  {area === 'big-front' ? 'Big Front' : area === 'small-front' ? 'Small Front' : area.charAt(0).toUpperCase() + area.slice(1)}
+                  {areaDisplay[area] || area}
                 </button>
               ))}
             </div>
@@ -610,6 +636,9 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
               selectedColor={selectedColor}
               onCanvasReady={handleCanvasReady}
               onSelectionChange={handleSelectionChange}
+              mockups={mockups}
+              printAreas={effectivePrintAreas}
+              viewLabel={areaDisplay[currentArea]}
               className="max-w-full max-h-full"
             />
           </div>

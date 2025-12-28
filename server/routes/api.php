@@ -93,6 +93,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 
     // Admin product management
     Route::get('/products', [AdminProductController::class, 'index']);
+    Route::post('/products', [AdminProductController::class, 'store']);
     Route::get('/products/{id}', [AdminProductController::class, 'show']);
     Route::put('/products/{id}', [AdminProductController::class, 'update']);
     Route::put('/products/{id}/toggle-status', [AdminProductController::class, 'toggleStatus']);

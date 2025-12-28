@@ -8,6 +8,9 @@ interface TShirtMockupProps {
   selectedColor: string;
   onCanvasReady: (canvas: fabric.Canvas) => void;
   onSelectionChange: (element: any) => void;
+  mockups?: Record<string, string | null>;
+  printAreas?: Record<string, { x: number; y: number; width: number; height: number }>;
+  viewLabel?: string;
   className?: string;
 }
 
@@ -16,19 +19,44 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
   selectedColor,
   onCanvasReady,
   onSelectionChange,
+  mockups = {},
+  printAreas = {},
+  viewLabel,
   className = ""
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const [containerSize, setContainerSize] = React.useState({ width: 500, height: 600 });
+
+  useEffect(() => {
+    const activeMockup = mockups[currentArea] || '/images/tshirt-template.png';
+    const img = new Image();
+    img.onload = () => {
+      const maxWidth = 500;
+      const maxHeight = 600;
+      const scale = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
+      const width = img.width * scale;
+      const height = img.height * scale;
+      setContainerSize({ width, height });
+    };
+    img.src = activeMockup;
+  }, [currentArea, mockups]);
+
+  const activeAreaConfig = printAreas[currentArea] || { x: 28, y: 28, width: 44, height: 60 }; // percent of container
+  const areaPx = {
+    x: (activeAreaConfig.x / 100) * containerSize.width,
+    y: (activeAreaConfig.y / 100) * containerSize.height,
+    width: (activeAreaConfig.width / 100) * containerSize.width,
+    height: (activeAreaConfig.height / 100) * containerSize.height,
+  };
 
   useEffect(() => {
     if (canvasRef.current && !fabricCanvasRef.current) {
-      // Define padding for controls
-      const PADDING = 60;
-
       const canvas = new fabric.Canvas(canvasRef.current, {
-        width: 240 + (PADDING * 2), // Initial placeholder
-        height: 280 + (PADDING * 2),
+        width: areaPx.width,
+        height: areaPx.height,
         backgroundColor: 'transparent',
         selection: true,
         preserveObjectStacking: true,
@@ -48,22 +76,12 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         borderDashArray: [4, 4],
       });
 
-      // Immediately resize to correct dimensions for current area
-      const areaWidth = currentArea === 'small-front' ? 176 : 220;
-      const areaHeight = currentArea === 'small-front' ? 96 : 270;
-
-      canvas.setDimensions({
-        width: areaWidth + (PADDING * 2),
-        height: areaHeight + (PADDING * 2)
-      });
-
-      // Add clipping path to constrain objects within the printable area
-      // Positioned at (PADDING, PADDING)
+      // Constrain drawing area to the print zone
       const clipPath = new fabric.Rect({
-        left: PADDING,
-        top: PADDING,
-        width: areaWidth,
-        height: areaHeight,
+        left: 0,
+        top: 0,
+        width: areaPx.width,
+        height: areaPx.height,
         absolutePositioned: true,
         fill: 'transparent',
         stroke: 'transparent',
@@ -145,27 +163,23 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         fabricCanvasRef.current = null;
       }
     };
-  }, [currentArea, onCanvasReady, onSelectionChange]);
+  }, [currentArea, onCanvasReady, onSelectionChange, areaPx.height, areaPx.width]);
 
   // Update canvas dimensions and clip path when area changes
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    const PADDING = 60;
-    const areaWidth = currentArea === 'small-front' ? 176 : 220;
-    const areaHeight = currentArea === 'small-front' ? 96 : 270;
-
     canvas.setDimensions({
-      width: areaWidth + (PADDING * 2),
-      height: areaHeight + (PADDING * 2)
+      width: areaPx.width,
+      height: areaPx.height
     });
 
     const clipPath = new fabric.Rect({
-      left: PADDING,
-      top: PADDING,
-      width: areaWidth,
-      height: areaHeight,
+      left: 0,
+      top: 0,
+      width: areaPx.width,
+      height: areaPx.height,
       absolutePositioned: true,
       fill: 'transparent',
       stroke: 'transparent',
@@ -175,61 +189,61 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
 
     canvas.clipPath = clipPath;
     canvas.requestRenderAll();
-  }, [currentArea]);
+  }, [currentArea, areaPx.height, areaPx.width]);
+
+  const activeMockup = mockups[currentArea] || '/images/tshirt-template.png';
 
   return (
     <div className={`flex items-center justify-center ${className}`}>
-      <div className="relative" style={{ width: '500px', height: '600px' }}>
-        {/* T-Shirt Background Image */}
+      <div ref={containerRef} className="relative" style={{ width: `${containerSize.width}px`, height: `${containerSize.height}px` }}>
+        {/* Product Mockup */}
         <div
           className="absolute inset-0 rounded-lg shadow-lg bg-center bg-no-repeat bg-contain"
           style={{
-            backgroundImage: `url('/images/tshirt-template.png')`,
-            filter: `hue-rotate(${selectedColor === '#FFFFFF' ? '0deg' : selectedColor === '#000000' ? '180deg' : '0deg'})`,
+            backgroundImage: `url('${activeMockup}')`,
+            backgroundColor: selectedColor,
+            backgroundSize: '100% 100%',
             pointerEvents: 'none'
           }}
         />
 
-        {/* Canvas Wrapper - Now Larger & Centered over the outline */}
+        {/* Canvas Wrapper positioned to print area */}
         <div
           className="absolute rounded-lg"
           style={{
-            // Position shifted by -PADDING relative to the visual outline
-            // New Center X (500/2=250). BigFront w=220 -> x=140. SmallFront w=176 -> x=162.
-            // Vert shift +50px due to height increase (500->600). BigFront y=140->190. SmallFront y=152->202.
-            top: (currentArea === 'small-front' ? 202 : 190) - 60 + 'px',
-            left: (currentArea === 'small-front' ? 162 : 140) - 60 + 'px',
-            // Dimensions = Area + PADDING * 2
-            width: (currentArea === 'small-front' ? 176 : 220) + 120 + 'px',
-            height: (currentArea === 'small-front' ? 96 : 270) + 120 + 'px',
+            top: `${areaPx.y}px`,
+            left: `${areaPx.x}px`,
+            width: `${areaPx.width}px`,
+            height: `${areaPx.height}px`,
             zIndex: 10,
-            // pointerEvents: 'none', // Allow clicks to pass through valid areas? No, canvas needs events.
           }}
         >
           <canvas
             ref={canvasRef}
             style={{
               backgroundColor: 'transparent',
+              width: '100%',
+              height: '100%',
             }}
           />
         </div>
 
-        {/* Printable Area Outline - VISUAL ONLY (Overlay) */}
+        {/* Printable Area Outline */}
         <div
           className="absolute border-2 border-dashed border-gray-400 rounded-md pointer-events-none"
           style={{
-            width: currentArea === 'small-front' ? '180px' : '220px',
-            height: currentArea === 'small-front' ? '100px' : '270px',
-            top: currentArea === 'small-front' ? '200px' : '190px',
-            left: currentArea === 'small-front' ? '160px' : '140px',
-            zIndex: 20, // Render ON TOP of canvas image to show limits clearly
+            width: `${areaPx.width}px`,
+            height: `${areaPx.height}px`,
+            top: `${areaPx.y}px`,
+            left: `${areaPx.x}px`,
+            zIndex: 20,
             backgroundColor: 'transparent'
           }}
         />
 
         {/* Area Indicator */}
         <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm z-20">
-          {currentArea.charAt(0).toUpperCase() + currentArea.slice(1)}
+          {viewLabel || currentArea}
         </div>
       </div>
     </div>

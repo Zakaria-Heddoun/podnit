@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 
 class AdminProductController extends Controller
 {
@@ -62,6 +63,84 @@ class AdminProductController extends Controller
     }
 
     /**
+     * Store a newly created product.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'category' => 'nullable|string|max:50',
+            'base_price' => 'required|numeric|min:0',
+            'available_colors' => 'sometimes|array',
+            'available_colors.*' => 'string',
+            'available_sizes' => 'sometimes|array',
+            'available_sizes.*' => 'string',
+            'is_active' => 'sometimes|boolean',
+            'in_stock' => 'sometimes|boolean',
+            'views' => 'sometimes|array',
+            'views.*.key' => 'required|string|max:50',
+            'views.*.name' => 'required|string|max:100',
+            'views.*.price' => 'nullable|numeric|min:0',
+            'views.*.area.x' => 'nullable|numeric|min:0|max:100',
+            'views.*.area.y' => 'nullable|numeric|min:0|max:100',
+            'views.*.area.width' => 'nullable|numeric|min:1|max:100',
+            'views.*.area.height' => 'nullable|numeric|min:1|max:100',
+            // Mockup can be a newly uploaded file or an existing URL/path string
+            'views.*.mockup' => 'nullable',
+            // Mockup uploads
+            'front_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'back_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'left_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'right_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            // Print areas (percent-based)
+            'print_areas' => 'sometimes|array',
+            'print_areas.front.x' => 'numeric|min:0|max:100',
+            'print_areas.front.y' => 'numeric|min:0|max:100',
+            'print_areas.front.width' => 'numeric|min:1|max:100',
+            'print_areas.front.height' => 'numeric|min:1|max:100',
+            'print_areas.back.x' => 'numeric|min:0|max:100',
+            'print_areas.back.y' => 'numeric|min:0|max:100',
+            'print_areas.back.width' => 'numeric|min:1|max:100',
+            'print_areas.back.height' => 'numeric|min:1|max:100',
+            'print_areas.left.x' => 'numeric|min:0|max:100',
+            'print_areas.left.y' => 'numeric|min:0|max:100',
+            'print_areas.left.width' => 'numeric|min:1|max:100',
+            'print_areas.left.height' => 'numeric|min:1|max:100',
+            'print_areas.right.x' => 'numeric|min:0|max:100',
+            'print_areas.right.y' => 'numeric|min:0|max:100',
+            'print_areas.right.width' => 'numeric|min:1|max:100',
+            'print_areas.right.height' => 'numeric|min:1|max:100',
+        ]);
+
+        $product = Product::create([
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'category' => $validated['category'] ?? null,
+            'base_price' => $validated['base_price'],
+            'available_colors' => $validated['available_colors'] ?? [],
+            'available_sizes' => $validated['available_sizes'] ?? [],
+            'is_active' => $validated['is_active'] ?? true,
+            'in_stock' => $validated['in_stock'] ?? true,
+            'mockups' => [],
+            'print_areas' => $validated['print_areas'] ?? null,
+            'views' => [],
+        ]);
+
+        $viewsData = $this->buildViewsPayload($request, $validated, $product->id);
+        $product->mockups = $viewsData['mockups'];
+        $product->print_areas = $viewsData['print_areas'];
+        $product->views = $viewsData['views'];
+        $product->save();
+
+        return response()->json([
+            'success' => true,
+            'data' => $product,
+            'message' => 'Product created successfully'
+        ], 201);
+    }
+
+    /**
      * Display the specified product
      */
     public function show($id): JsonResponse
@@ -106,6 +185,38 @@ class AdminProductController extends Controller
             'product_image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // 5MB max
             'available_colors' => 'sometimes|array',
             'available_sizes' => 'sometimes|array',
+            'print_areas' => 'sometimes|array',
+            'print_areas.front.x' => 'numeric|min:0|max:100',
+            'print_areas.front.y' => 'numeric|min:0|max:100',
+            'print_areas.front.width' => 'numeric|min:1|max:100',
+            'print_areas.front.height' => 'numeric|min:1|max:100',
+            'print_areas.back.x' => 'numeric|min:0|max:100',
+            'print_areas.back.y' => 'numeric|min:0|max:100',
+            'print_areas.back.width' => 'numeric|min:1|max:100',
+            'print_areas.back.height' => 'numeric|min:1|max:100',
+            'print_areas.left.x' => 'numeric|min:0|max:100',
+            'print_areas.left.y' => 'numeric|min:0|max:100',
+            'print_areas.left.width' => 'numeric|min:1|max:100',
+            'print_areas.left.height' => 'numeric|min:1|max:100',
+            'print_areas.right.x' => 'numeric|min:0|max:100',
+            'print_areas.right.y' => 'numeric|min:0|max:100',
+            'print_areas.right.width' => 'numeric|min:1|max:100',
+            'print_areas.right.height' => 'numeric|min:1|max:100',
+            // Mockups
+            'front_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'back_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'left_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'right_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'views' => 'sometimes|array',
+            'views.*.key' => 'required|string|max:50',
+            'views.*.name' => 'required|string|max:100',
+            'views.*.price' => 'nullable|numeric|min:0',
+            'views.*.area.x' => 'nullable|numeric|min:0|max:100',
+            'views.*.area.y' => 'nullable|numeric|min:0|max:100',
+            'views.*.area.width' => 'nullable|numeric|min:1|max:100',
+            'views.*.area.height' => 'nullable|numeric|min:1|max:100',
+            // Mockup can be a newly uploaded file or an existing URL/path string
+            'views.*.mockup' => 'nullable',
         ]);
 
         // Handle image upload if a file is provided
@@ -126,6 +237,17 @@ class AdminProductController extends Controller
             
             // Remove product_image from validated array as it's not a database field
             unset($validated['product_image']);
+        }
+
+        $viewsData = $this->buildViewsPayload($request, $validated, $product->id, $product->mockups ?? [], $product->views ?? []);
+        if (!empty($viewsData['mockups'])) {
+            $validated['mockups'] = $viewsData['mockups'];
+        }
+        if (!empty($viewsData['print_areas'])) {
+            $validated['print_areas'] = $viewsData['print_areas'];
+        }
+        if (!empty($viewsData['views'])) {
+            $validated['views'] = $viewsData['views'];
         }
 
         $product->update($validated);
@@ -189,5 +311,92 @@ class AdminProductController extends Controller
             'data' => $product,
             'message' => 'Product stock status updated successfully'
         ]);
+    }
+
+    /**
+     * Store mockup file and return relative path.
+     */
+    private function storeMockupFile($file, string $side, int $productId): string
+    {
+        $extension = $file->getClientOriginalExtension();
+        $filename = sprintf('product-%d-%s-%d.%s', $productId, $side, time(), $extension);
+        $file->move(public_path('images/products/mockups'), $filename);
+        return '/images/products/mockups/' . $filename;
+    }
+
+    /**
+     * Build views payload (mockups, print areas, view metadata) from request.
+     */
+    private function buildViewsPayload(Request $request, array $validated, int $productId, array $existingMockups = [], array $existingViews = []): array
+    {
+        $viewsInput = $request->input('views', []);
+        $views = [];
+        $mockups = $existingMockups;
+        $printAreas = [];
+
+        // Support legacy fixed fields as fallback
+        $legacySides = ['front', 'back', 'left', 'right'];
+        if (empty($viewsInput) && ($request->hasFile('front_mockup') || $request->hasFile('back_mockup') || $request->hasFile('left_mockup') || $request->hasFile('right_mockup'))) {
+            foreach ($legacySides as $side) {
+                $fileKey = $side . '_mockup';
+                if ($request->hasFile($fileKey)) {
+                    $mockups[$side] = $this->storeMockupFile($request->file($fileKey), $side, $productId);
+                }
+                $views[] = [
+                    'key' => $side,
+                    'name' => ucfirst($side),
+                    'mockup' => $mockups[$side] ?? null,
+                    'area' => $validated['print_areas'][$side] ?? null,
+                ];
+                if (isset($validated['print_areas'][$side])) {
+                    $printAreas[$side] = $validated['print_areas'][$side];
+                }
+            }
+            return [
+                'views' => $views,
+                'mockups' => $mockups,
+                'print_areas' => $printAreas,
+            ];
+        }
+
+        foreach ($viewsInput as $index => $view) {
+            $key = $view['key'] ?? 'view_' . $index;
+            $name = $view['name'] ?? ucfirst(Str::slug($key, ' '));
+            $area = $view['area'] ?? null;
+            $fileField = "views.$index.mockup";
+            $price = $view['price'] ?? null;
+
+            $mockupPath = $view['mockup'] ?? null;
+
+            if ($request->hasFile($fileField)) {
+                $mockupPath = $this->storeMockupFile($request->file($fileField), $key, $productId);
+            } elseif (!empty($existingViews)) {
+                $existing = collect($existingViews)->firstWhere('key', $key);
+                if ($existing && !empty($existing['mockup'])) {
+                    $mockupPath = $existing['mockup'];
+                }
+            }
+
+            if ($mockupPath) {
+                $mockups[$key] = $mockupPath;
+            }
+            if ($area) {
+                $printAreas[$key] = $area;
+            }
+
+            $views[] = [
+                'key' => $key,
+                'name' => $name,
+                'mockup' => $mockupPath,
+                'price' => $price,
+                'area' => $area,
+            ];
+        }
+
+        return [
+            'views' => $views,
+            'mockups' => $mockups,
+            'print_areas' => $printAreas,
+        ];
     }
 }

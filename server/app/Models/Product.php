@@ -18,6 +18,9 @@ class Product extends Model
         'available_colors',
         'available_sizes',
         'image_url',
+        'mockups',
+        'print_areas',
+        'views',
         'is_active',
         'in_stock',
     ];
@@ -26,6 +29,9 @@ class Product extends Model
         'base_price' => 'decimal:2',
         'available_colors' => 'array',
         'available_sizes' => 'array',
+        'mockups' => 'array',
+        'print_areas' => 'array',
+        'views' => 'array',
         'is_active' => 'boolean',
         'in_stock' => 'boolean',
     ];

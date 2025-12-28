@@ -15,7 +15,11 @@ function StudioContent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isProductLoading, setIsProductLoading] = useState(false);
   const [productColors, setProductColors] = useState<string[]>([]);
+  const [productMockups, setProductMockups] = useState<Record<string, string | null>>({});
+  const [productPrintAreas, setProductPrintAreas] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
+  const [productViews, setProductViews] = useState<any[]>([]);
 
   useEffect(() => {
     if (templateId) {
@@ -25,6 +29,7 @@ function StudioContent() {
 
   useEffect(() => {
     const fetchProductColors = async (id: string) => {
+      setIsProductLoading(true);
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const token = localStorage.getItem('token');
@@ -75,8 +80,39 @@ function StudioContent() {
         if (resolved.length > 0) {
           setProductColors(resolved);
         }
+
+        const mockups = payload?.data?.mockups || payload?.mockups || {};
+        const resolvedMockups: Record<string, string | null> = {};
+        Object.entries(mockups || {}).forEach(([key, val]) => {
+          if (typeof val === 'string') {
+            resolvedMockups[key] = val.startsWith('/') ? `${API_URL}${val}` : val;
+          }
+        });
+        setProductMockups(resolvedMockups);
+
+        const printAreas = payload?.data?.print_areas || payload?.print_areas || {};
+        setProductPrintAreas(printAreas);
+
+        const views = Array.isArray(payload?.data?.views) ? payload.data.views : [];
+        const resolvedViews = views.map((v: any) => ({
+          ...v,
+          mockup: typeof v.mockup === 'string' && v.mockup.startsWith('/') ? `${API_URL}${v.mockup}` : v.mockup
+        }));
+        setProductViews(resolvedViews);
+
+        if (resolvedViews.length > 0) {
+          const areasMap: Record<string, { x: number; y: number; width: number; height: number }> = {};
+          resolvedViews.forEach((v: any) => {
+            if (v.area) {
+              areasMap[v.key] = v.area;
+            }
+          });
+          setProductPrintAreas(areasMap);
+        }
       } catch (error) {
         console.error('Failed to load product colors', error);
+      } finally {
+        setIsProductLoading(false);
       }
     };
 
@@ -285,12 +321,20 @@ function StudioContent() {
 
       {/* Fullscreen Design Canvas */}
       <div className="flex-1 relative">
-        {isLoading && (
+        {(isLoading || isProductLoading) && (
           <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
           </div>
         )}
-        <DesignCanvas ref={canvasRef} availableColors={productColors} />
+        {!isProductLoading && (
+          <DesignCanvas
+            ref={canvasRef}
+            availableColors={productColors}
+            mockups={productMockups}
+            printAreas={productPrintAreas}
+            views={productViews}
+          />
+        )}
       </div>
 
       <SaveTemplateModal
