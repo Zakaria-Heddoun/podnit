@@ -8,6 +8,7 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
@@ -47,17 +48,11 @@ class RegisteredUserController extends Controller
             'role' => 'seller', // All new registrations are sellers
             'brand_name' => $request->brand_name,
             'phone' => $request->phone,
-            'referral_code' => $this->generateUniqueReferralCode(),
+            'referral_code' => $referralCode,
+            'referred_by_id' => $referrer?->id,
         ]);
 
-        // Handle referral bonus if there was a referrer
-        if ($referrer) {
-            // Give bonus points to the referrer (e.g., 100 points for successful referral)
-            $referrer->increment('points', 100);
-            
-            // Optionally, you can also give bonus points to the new user
-            $user->increment('points', 50);
-        }
+        // Points are granted when orders are placed, not at signup.
 
         event(new Registered($user));
 

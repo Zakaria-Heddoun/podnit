@@ -164,6 +164,10 @@ function StudioContent() {
 
   const handleConfirmSave = async (name: string) => {
     if (!canvasRef.current) return;
+    if (!productId) {
+      alert('Missing product reference for this template.');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -173,19 +177,10 @@ function StudioContent() {
 
       // Step 1: Upload images separately to avoid large payload
       console.log('📤 Step 1: Uploading images separately...');
-      const firstImage = Object.values(designData.images).find(Boolean) as string | null;
-      const imageTypes = [
-        { key: 'big-front', data: designData.images['big-front'] || firstImage },
-        { key: 'small-front', data: designData.images['small-front'] || null },
-        { key: 'back', data: designData.images.back || null },
-        { key: 'left-sleeve', data: designData.images.left || null },
-        { key: 'right-sleeve', data: designData.images.right || null },
-      ];
-
       const imageUrls: Record<string, string> = {};
 
       // Upload each image separately (only if it's base64, skip if already a URL)
-      for (const { key, data } of imageTypes) {
+      for (const [key, data] of Object.entries(designData.images)) {
         if (!data) continue;
         
         // If it's already a URL, use it directly
@@ -225,18 +220,18 @@ function StudioContent() {
         }
       }
 
+      const designConfig = {
+        ...designData.designConfig,
+        images: imageUrls,
+      };
+
       // Step 2: Create template with image URLs (much smaller payload)
       console.log('📤 Step 2: Creating template with image URLs...');
       const payload = {
         title: name,
-        product_id: 1,
-        design_config: JSON.stringify(designData.designConfig),
-        big_front_image: imageUrls['big-front'] || null,
-        small_front_image: imageUrls['small-front'] || null,
-        back_image: imageUrls['back'] || null,
-        left_sleeve_image: imageUrls['left-sleeve'] || null,
-        right_sleeve_image: imageUrls['right-sleeve'] || null,
-        colors: [designData.designConfig.color],
+        product_id: Number(productId),
+        design_config: designConfig,
+        colors: [designData.designConfig.color].filter(Boolean),
       };
 
       const url = templateId

@@ -130,6 +130,12 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
 
         const loadState = (canvasObj: any, json: string) =>
           new Promise<void>((resolve, reject) => {
+            // Always reset to avoid leaking previous view drawings
+            canvasObj.clear();
+            canvasObj.renderAll();
+            if (!json) {
+              return resolve();
+            }
             canvasObj.loadFromJSON(json, () => {
               canvasObj.renderAll();
               resolve();

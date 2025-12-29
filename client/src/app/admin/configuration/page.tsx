@@ -11,6 +11,11 @@ interface GeneralSettings {
   language: string;
   currency: string;
   maintenance: boolean;
+  referralPointsReferrer: number;
+  pointsPerOrder: number;
+  deliveryPrice: number;
+  minDeposit: number;
+  minWithdrawal: number;
 }
 
 interface PaymentSettings {
@@ -81,7 +86,12 @@ export default function AdminConfiguration() {
     timezone: "UTC",
     language: "en",
     currency: "USD",
-    maintenance: false
+    maintenance: false,
+    referralPointsReferrer: 100,
+    pointsPerOrder: 10,
+    deliveryPrice: 0,
+    minDeposit: 100,
+    minWithdrawal: 50
   });
 
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({
@@ -206,6 +216,76 @@ export default function AdminConfiguration() {
                   General Settings
                 </h3>
                 <div className="space-y-6">
+                  <div className="rounded-lg border border-gray-200 p-6 dark:border-gray-700">
+                    <h4 className="text-lg font-medium text-gray-800 dark:text-white mb-4">Points & Financials</h4>
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Points per Order
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={generalSettings.pointsPerOrder}
+                          onChange={(e) => setGeneralSettings({ ...generalSettings, pointsPerOrder: parseInt(e.target.value) || 0 })}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Points a seller earns for each order they place.</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Referral Bonus (per order)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={generalSettings.referralPointsReferrer}
+                          onChange={(e) => setGeneralSettings({ ...generalSettings, referralPointsReferrer: parseInt(e.target.value) || 0 })}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Points the referrer earns when their referred seller places an order.</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Delivery Price
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={generalSettings.deliveryPrice}
+                          onChange={(e) => setGeneralSettings({ ...generalSettings, deliveryPrice: parseFloat(e.target.value) || 0 })}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Minimum Deposit
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={generalSettings.minDeposit}
+                          onChange={(e) => setGeneralSettings({ ...generalSettings, minDeposit: parseFloat(e.target.value) || 0 })}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Minimum Withdrawal
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={generalSettings.minWithdrawal}
+                          onChange={(e) => setGeneralSettings({ ...generalSettings, minWithdrawal: parseFloat(e.target.value) || 0 })}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

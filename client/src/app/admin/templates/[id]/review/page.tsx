@@ -51,6 +51,41 @@ export default function TemplateReviewPage() {
         return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${path}`;
     };
 
+    const designConfig = React.useMemo(() => {
+        if (!template?.design_config) return null;
+        if (typeof template.design_config === 'string') {
+            try {
+                return JSON.parse(template.design_config);
+            } catch {
+                return null;
+            }
+        }
+        return template.design_config;
+    }, [template]);
+
+    const designImages = React.useMemo(() => {
+        const images: { key: string; name: string; url: string | null }[] = [];
+        if (!designConfig?.images) return images;
+
+        const viewNames: Record<string, string> = {};
+        (designConfig.views || []).forEach((view: any) => {
+            if (view?.key) {
+                viewNames[view.key] = view.name || view.key;
+            }
+        });
+
+        Object.entries(designConfig.images).forEach(([key, value]) => {
+            if (!value) return;
+            images.push({
+                key,
+                name: viewNames[key] || key,
+                url: getImageUrl(value as string)
+            });
+        });
+
+        return images;
+    }, [designConfig]);
+
     const handleApprove = async () => {
         if (!confirm('Are you sure you want to approve this template?')) return;
 
@@ -124,14 +159,6 @@ export default function TemplateReviewPage() {
         );
     }
 
-    const designSides = [
-        { name: 'Big Front', key: 'big_front_image' },
-        { name: 'Small Front', key: 'small_front_image' },
-        { name: 'Back', key: 'back_image' },
-        { name: 'Left Sleeve', key: 'left_sleeve_image' },
-        { name: 'Right Sleeve', key: 'right_sleeve_image' },
-    ];
-
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
             {/* Header */}
@@ -191,8 +218,8 @@ export default function TemplateReviewPage() {
             {/* Design Images Grid */}
             <div className="mx-auto max-w-screen-2xl p-6">
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {designSides.map((side) => {
-                        const imageUrl = getImageUrl(template?.[side.key]);
+                    {designImages.map((side) => {
+                        const imageUrl = side.url;
 
                         if (!imageUrl) return null;
 
@@ -227,7 +254,7 @@ export default function TemplateReviewPage() {
                     })}
                 </div>
 
-                {designSides.every(side => !template?.[side.key]) && (
+                {designImages.length === 0 && (
                     <div className="py-12 text-center text-gray-500">
                         No design images found for this template
                     </div>

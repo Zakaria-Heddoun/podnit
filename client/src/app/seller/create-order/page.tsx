@@ -121,12 +121,30 @@ export default function CreateOrderPage() {
                 const fullTemplate = result.data;
 
                 // Map API response to component's Template interface
+                const parsedConfig = (() => {
+                  if (!fullTemplate.design_config) return null;
+                  if (typeof fullTemplate.design_config === 'string') {
+                    try {
+                      return JSON.parse(fullTemplate.design_config);
+                    } catch {
+                      return null;
+                    }
+                  }
+                  return fullTemplate.design_config;
+                })();
+
+                const firstDesignImage = parsedConfig?.images ? (Object.values(parsedConfig.images).find((val) => !!val) as string | undefined) : undefined;
+                const resolveUrl = (url?: string | null) => {
+                  if (!url) return undefined;
+                  return url.startsWith('http') ? url : `${API_URL}${url}`;
+                };
+
                 setTemplate({
                   templateId: fullTemplate.id,
                   templateName: fullTemplate.title,
                   templatePrice: parseFloat(fullTemplate.product?.base_price) || 0,
                   templateCategory: fullTemplate.product?.category || 'Unknown',
-                  templateImage: fullTemplate.thumbnail_image || fullTemplate.big_front_image || fullTemplate.small_front_image
+                  templateImage: resolveUrl(fullTemplate.thumbnail_image || firstDesignImage),
                 });
 
                 // Set default form values
@@ -467,14 +485,14 @@ export default function CreateOrderPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-700"></div>
       </div>
     );
   }
 
   if (!product && !template) {
     return (
-      <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-strokedark dark:bg-boxdark">
         <h2 className="text-xl font-semibold text-black dark:text-white mb-4">
           {orderType === 'template' ? 'Template Not Found' : 'Product Not Found'}
         </h2>
@@ -494,20 +512,20 @@ export default function CreateOrderPage() {
   const itemCategory = orderType === 'template' ? template?.templateCategory : product?.category;
 
   return (
-    <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-      <div className="border-b border-stroke py-4 px-6.5 dark:border-strokedark">
-        <h3 className="font-semibold text-black dark:text-white">
+    <div className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-boxdark">
+      <div className="flex flex-col gap-1">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
           Create Order: {itemName}
         </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           {orderType === 'template' ? 'From Template' : 'From Product Catalog'}
         </p>
       </div>
 
-      <div className="grid grid-cols-12 gap-6 p-6.5">
+      <div className="grid grid-cols-12 gap-6">
         {/* Product/Template Info */}
         <div className="col-span-12 xl:col-span-4">
-          <div className="rounded-sm border border-stroke bg-gray-50 p-4 dark:border-strokedark dark:bg-meta-4">
+          <div className="h-full rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900/40">
             <div className="mb-4">
               {orderType === 'product' && product?.image_url && (
                 <div className="mb-3 h-32 w-full overflow-hidden rounded">
@@ -543,8 +561,8 @@ export default function CreateOrderPage() {
                       className="h-full w-full object-contain"
                     />
                   ) : (
-                    <div className="h-full w-full bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 flex items-center justify-center">
-                      <svg className="h-16 w-16 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="h-full w-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center">
+                      <svg className="h-16 w-16 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     </div>
@@ -561,8 +579,8 @@ export default function CreateOrderPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   Base cost: <span className="font-medium">{Number(itemPrice || 0).toFixed(2)} DH</span>
                 </p>
-                <p className="text-lg font-bold text-blue-600">
-                  Your price: {formData.selling_price > 0 ? `${Number(formData.selling_price).toFixed(2)} DH` : 'Set price →'}
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Your price: {formData.selling_price > 0 ? `${Number(formData.selling_price).toFixed(2)} DH` : 'Set price'}
                 </p>
               </div>
             </div>
@@ -575,7 +593,7 @@ export default function CreateOrderPage() {
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Your price per unit:</span>
-                  <span className="font-medium text-blue-600">{formData.selling_price > 0 ? `${Number(formData.selling_price).toFixed(2)} DH` : 'Not set'}</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{formData.selling_price > 0 ? `${Number(formData.selling_price).toFixed(2)} DH` : 'Not set'}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Profit per unit:</span>
@@ -589,7 +607,7 @@ export default function CreateOrderPage() {
                 </div>
                 <div className="flex justify-between items-center text-lg font-bold border-t pt-2">
                   <span className="text-black dark:text-white">Total Revenue:</span>
-                  <span className="text-blue-600">{Number(calculateTotal()).toFixed(2)} DH</span>
+                  <span className="text-gray-900 dark:text-white">{Number(calculateTotal()).toFixed(2)} DH</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Total Profit:</span>
@@ -606,31 +624,27 @@ export default function CreateOrderPage() {
         <div className="col-span-12 xl:col-span-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Customer Information */}
-            <div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/40">
               <h5 className="text-lg font-medium text-black dark:text-white mb-4">Customer Information</h5>
 
               {/* Customer Selection Toggle */}
-              <div className="mb-4 flex items-center space-x-4">
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, create_new_customer: false }))}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${!formData.create_new_customer
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                >
-                  Select Existing Customer
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNewCustomerToggle}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${formData.create_new_customer
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                >
-                  Create New Customer
-                </button>
+              <div className="mb-4 flex items-center gap-3">
+                <div className="inline-flex rounded-lg border border-gray-200 bg-gray-100 p-1 text-sm dark:border-gray-800 dark:bg-gray-800/60">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, create_new_customer: false }))}
+                    className={`px-3 py-1.5 rounded-md transition-colors ${!formData.create_new_customer ? 'bg-white shadow-sm dark:bg-gray-700' : 'text-gray-600 dark:text-gray-300'}`}
+                  >
+                    Select Existing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNewCustomerToggle}
+                    className={`px-3 py-1.5 rounded-md transition-colors ${formData.create_new_customer ? 'bg-white shadow-sm dark:bg-gray-700' : 'text-gray-600 dark:text-gray-300'}`}
+                  >
+                    Create New
+                  </button>
+                </div>
               </div>
 
               {/* Existing Customer Selection */}
@@ -642,7 +656,7 @@ export default function CreateOrderPage() {
                   <select
                     value={formData.customer_id || ''}
                     onChange={(e) => handleCustomerSelection(parseInt(e.target.value))}
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.customer_selection ? 'border-red-500' : 'border-stroke'
+                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.customer_selection ? 'border-red-500' : 'border-stroke'
                       }`}
                   >
                     <option value="">Choose a customer...</option>
@@ -682,7 +696,7 @@ export default function CreateOrderPage() {
                       name="customer_name"
                       value={formData.customer_name}
                       onChange={handleInputChange}
-                      className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.customer_name ? 'border-red-500' : 'border-stroke'
+                      className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.customer_name ? 'border-red-500' : 'border-stroke'
                         }`}
                       placeholder="Enter customer full name"
                     />
@@ -700,7 +714,7 @@ export default function CreateOrderPage() {
                       name="customer_email"
                       value={formData.customer_email}
                       onChange={handleInputChange}
-                      className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.customer_email ? 'border-red-500' : 'border-stroke'
+                      className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.customer_email ? 'border-red-500' : 'border-stroke'
                         }`}
                       placeholder="customer@example.com"
                     />
@@ -718,7 +732,7 @@ export default function CreateOrderPage() {
                       name="customer_phone"
                       value={formData.customer_phone}
                       onChange={handleInputChange}
-                      className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.customer_phone ? 'border-red-500' : 'border-stroke'
+                      className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.customer_phone ? 'border-red-500' : 'border-stroke'
                         }`}
                       placeholder="+212 600 000 000"
                     />
@@ -737,7 +751,7 @@ export default function CreateOrderPage() {
                       value={formData.quantity}
                       onChange={handleInputChange}
                       min="1"
-                      className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.quantity ? 'border-red-500' : 'border-stroke'
+                      className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.quantity ? 'border-red-500' : 'border-stroke'
                         }`}
                     />
                     {errors.quantity && (
@@ -759,7 +773,7 @@ export default function CreateOrderPage() {
                     value={formData.quantity}
                     onChange={handleInputChange}
                     min="1"
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.quantity ? 'border-red-500' : 'border-stroke'
+                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.quantity ? 'border-red-500' : 'border-stroke'
                       }`}
                   />
                   {errors.quantity && (
@@ -770,8 +784,8 @@ export default function CreateOrderPage() {
             </div>
 
             {/* Product Customization */}
-            <div>
-              <h5 className="text-lg font-medium text-black dark:text-white mb-4">Product Options</h5>
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/40">
+              <h5 className="text-lg font-semibold text-black dark:text-white mb-4">Product Options</h5>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
                   <label className="mb-3 block text-sm font-medium text-black dark:text-white">
@@ -781,7 +795,7 @@ export default function CreateOrderPage() {
                     name="selected_color"
                     value={formData.selected_color}
                     onChange={handleInputChange}
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.selected_color ? 'border-red-500' : 'border-stroke'
+                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.selected_color ? 'border-red-500' : 'border-stroke'
                       }`}
                   >
                     <option value="">Select Color</option>
@@ -805,7 +819,7 @@ export default function CreateOrderPage() {
                     name="selected_size"
                     value={formData.selected_size}
                     onChange={handleInputChange}
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.selected_size ? 'border-red-500' : 'border-stroke'
+                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.selected_size ? 'border-red-500' : 'border-stroke'
                       }`}
                   >
                     <option value="">Select Size</option>
@@ -832,7 +846,7 @@ export default function CreateOrderPage() {
                     onChange={handleInputChange}
                     min={itemPrice || 0}
                     step="0.01"
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors.selling_price ? 'border-red-500' : 'border-stroke'
+                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.selling_price ? 'border-red-500' : 'border-stroke'
                       }`}
                     placeholder={`Min: ${Number(itemPrice || 0).toFixed(2)} DH`}
                   />
@@ -847,8 +861,8 @@ export default function CreateOrderPage() {
             </div>
 
             {/* Shipping Address */}
-            <div>
-              <h5 className="text-lg font-medium text-black dark:text-white mb-4">Shipping Address</h5>
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/40">
+              <h5 className="text-lg font-semibold text-black dark:text-white mb-4">Shipping Address</h5>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="mb-3 block text-sm font-medium text-black dark:text-white">
@@ -859,7 +873,7 @@ export default function CreateOrderPage() {
                     name="shipping_address.street"
                     value={formData.shipping_address.street}
                     onChange={handleInputChange}
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors['shipping_address.street'] ? 'border-red-500' : 'border-stroke'
+                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors['shipping_address.street'] ? 'border-red-500' : 'border-stroke'
                       }`}
                     placeholder="123 Main Street, Apartment 4"
                   />
@@ -877,7 +891,7 @@ export default function CreateOrderPage() {
                     name="shipping_address.city"
                     value={formData.shipping_address.city}
                     onChange={handleInputChange}
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors['shipping_address.city'] ? 'border-red-500' : 'border-stroke'
+                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors['shipping_address.city'] ? 'border-red-500' : 'border-stroke'
                       }`}
                     placeholder="Casablanca"
                   />
@@ -895,7 +909,7 @@ export default function CreateOrderPage() {
                     name="shipping_address.postal_code"
                     value={formData.shipping_address.postal_code}
                     onChange={handleInputChange}
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary ${errors['shipping_address.postal_code'] ? 'border-red-500' : 'border-stroke'
+                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors['shipping_address.postal_code'] ? 'border-red-500' : 'border-stroke'
                       }`}
                     placeholder="20000"
                   />
@@ -912,7 +926,7 @@ export default function CreateOrderPage() {
                     name="shipping_address.country"
                     value={formData.shipping_address.country}
                     onChange={handleInputChange}
-                    className="w-full rounded border border-stroke px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                    className="w-full rounded border border-stroke px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900"
                   >
                     <option value="Morocco">Morocco</option>
                     <option value="Algeria">Algeria</option>
@@ -923,7 +937,7 @@ export default function CreateOrderPage() {
             </div>
 
             {/* Additional Notes */}
-            <div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/40">
               <label className="mb-3 block text-sm font-medium text-black dark:text-white">
                 Additional Notes
               </label>
@@ -932,13 +946,13 @@ export default function CreateOrderPage() {
                 value={formData.notes}
                 onChange={handleInputChange}
                 rows={3}
-                className="w-full rounded border border-stroke px-4 py-3 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                className="w-full rounded border border-stroke px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900"
                 placeholder="Any special instructions or requests..."
               />
             </div>
 
             {/* Submit Buttons */}
-            <div className="flex gap-4 justify-end">
+            <div className="flex gap-3 justify-end pt-2">
               <Button
                 type="button"
                 variant="outline"
@@ -950,7 +964,7 @@ export default function CreateOrderPage() {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="bg-primary hover:bg-primary/90"
+                className="bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
               >
                 {submitting ? (
                   <>

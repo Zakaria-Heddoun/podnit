@@ -72,7 +72,7 @@ class TemplateController extends Controller
                 // It's base64 in JSON
                 $request->validate([
                     'image' => 'required|string', // base64 image
-                    'type' => 'required|string|in:big-front,small-front,back,left-sleeve,right-sleeve',
+                    'type' => 'required|string|max:100',
                 ]);
                 $imageData = $request->input('image');
                 $type = $request->input('type');
@@ -85,7 +85,7 @@ class TemplateController extends Controller
                 ], 400);
             }
 
-            $imageUrl = $this->saveImage($imageData, $type);
+            $imageUrl = $this->saveImage($imageData, $this->sanitizeTypeKey($type));
             
             if (!$imageUrl) {
                 return response()->json([
@@ -132,70 +132,12 @@ class TemplateController extends Controller
             $request->validate([
                 'title' => 'required|string|max:255',
                 'product_id' => 'required|exists:products,id',
-                'design_config' => 'required|string', // No size limit - stored as TEXT in database
+                'design_config' => 'required', // Accepts JSON string or array
             ]);
             
-            $designConfig = $request->design_config;
-            
-            // If design_config is a JSON string, decode it so Eloquent can handle it properly
-            // The model casts it as 'array', so it expects an array, not a JSON string
-            if (is_string($designConfig)) {
-                $decoded = json_decode($designConfig, true);
-                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                    $designConfig = $decoded;
-                }
-            }
-            
-            // Log size for monitoring
-            $configSize = is_string($designConfig) ? strlen($designConfig) : strlen(json_encode($designConfig));
-            \Log::info('Design config size', ['size_bytes' => $configSize, 'size_kb' => round($configSize / 1024, 2)]);
-
-            // Process images ONLY if they're base64 (not URLs)
-            // If frontend uploaded images separately, they should already be URLs
-            \Log::info('Processing images (only if base64)...');
-            
-            $processImage = function($imageData, $type) {
-                if (!$imageData) return null;
-                // If it's already a URL (starts with /storage/ or http), use it directly
-                if (is_string($imageData) && (str_starts_with($imageData, '/storage/') || str_starts_with($imageData, 'http'))) {
-                    return $imageData;
-                }
-                // If it's base64, process it
-                if (is_string($imageData) && str_starts_with($imageData, 'data:')) {
-                    return $this->saveImage($imageData, $type);
-                }
-                // Otherwise assume it's already a URL
-                return $imageData;
-            };
-            
-            $bigFrontImageUrl = $processImage($request->big_front_image, 'big-front');
-            $smallFrontImageUrl = $processImage($request->small_front_image, 'small-front');
-            $backImageUrl = $processImage($request->back_image, 'back');
-            $leftSleeveImageUrl = $processImage($request->left_sleeve_image, 'left-sleeve');
-            $rightSleeveImageUrl = $processImage($request->right_sleeve_image, 'right-sleeve');
-
-            \Log::info('Images processed', [
-                'big_front' => $bigFrontImageUrl ? 'saved' : 'null',
-                'small_front' => $smallFrontImageUrl ? 'saved' : 'null',
-                'back' => $backImageUrl ? 'saved' : 'null',
-                'left_sleeve' => $leftSleeveImageUrl ? 'saved' : 'null',
-                'right_sleeve' => $rightSleeveImageUrl ? 'saved' : 'null',
-            ]);
-
-            // Thumbnail priority: big_front > small_front > back > sleeves
-            $thumbnailUrl = $bigFrontImageUrl ?? $smallFrontImageUrl ?? $backImageUrl ?? $leftSleeveImageUrl ?? $rightSleeveImageUrl;
-            
-            \Log::info('Selected thumbnail', ['thumbnail' => $thumbnailUrl]);
-
-            // Now create template with ONLY URLs (no base64 data)
-            // All images are already saved to disk, so we're only storing small URL strings
-            \Log::info('Creating template record with image URLs only', [
-                'payload_size' => strlen(json_encode([
-                    'title' => $request->title,
-                    'product_id' => $request->product_id,
-                    'design_config' => $request->design_config,
-                ]))
-            ]);
+            $designConfig = $this->prepareDesignConfig($request->design_config, $request->design_images ?? null);
+            $colors = $this->extractColorsFromRequest($request, $designConfig);
+            $thumbnailUrl = $this->firstImageFromConfig($designConfig);
             
             // Try to increase max_allowed_packet for this session (if possible)
             try {
@@ -207,6 +149,20 @@ class TemplateController extends Controller
             $maxRetries = 3;
             $retryCount = 0;
             $template = null;
+            $templateData = [
+                'user_id' => Auth::id(),
+                'product_id' => $request->product_id,
+                'title' => $request->title,
+                'description' => $request->description ?? null,
+                'design_config' => $designConfig,
+                'thumbnail_image' => $thumbnailUrl,
+                'colors' => $colors,
+                'status' => 'PENDING',
+            ];
+
+            // Log payload size for debugging
+            $payloadSize = strlen(json_encode($templateData));
+            \Log::info('Creating template with payload size', ['size_bytes' => $payloadSize, 'size_kb' => round($payloadSize / 1024, 2)]);
             
             while ($retryCount < $maxRetries) {
                 try {
@@ -225,29 +181,6 @@ class TemplateController extends Controller
                             // Ignore
                         }
                     }
-                    
-                    // Create template directly (no transaction to reduce overhead)
-                    // All images are already URLs (not base64), so payload is very small
-                    // Eloquent will automatically JSON encode colors and design_config (array cast)
-                    $templateData = [
-                        'user_id' => Auth::id(),
-                        'product_id' => $request->product_id,
-                        'title' => $request->title,
-                        'description' => $request->description ?? null,
-                        'design_config' => $designConfig, // Should be array (decoded from JSON string)
-                        'thumbnail_image' => $thumbnailUrl,
-                        'big_front_image' => $bigFrontImageUrl,
-                        'small_front_image' => $smallFrontImageUrl,
-                        'back_image' => $backImageUrl,
-                        'left_sleeve_image' => $leftSleeveImageUrl,
-                        'right_sleeve_image' => $rightSleeveImageUrl,
-                        'colors' => is_array($request->colors) ? $request->colors : (json_decode($request->colors ?? '[]', true) ?: []),
-                        'status' => 'PENDING',
-                    ];
-                    
-                    // Log payload size for debugging
-                    $payloadSize = strlen(json_encode($templateData));
-                    \Log::info('Creating template with payload size', ['size_bytes' => $payloadSize, 'size_kb' => round($payloadSize / 1024, 2)]);
                     
                     // Use Eloquent create() to handle JSON casting automatically
                     // The Template model will automatically JSON encode colors and design_config
@@ -353,33 +286,19 @@ class TemplateController extends Controller
 
         $request->validate([
             'title' => 'string|max:255',
+            'design_config' => 'sometimes',
         ]);
 
-        $data = $request->except(['status', 'admin_feedback', 'approved_by', 'approved_at']);
+        $data = $request->except(['status', 'admin_feedback', 'approved_by', 'approved_at', 'design_images']);
 
-        // Handle all design side image updates if provided
-        if ($request->has('big_front_image') && $this->isBase64($request->big_front_image)) {
-            $data['big_front_image'] = $this->saveImage($request->big_front_image, 'big-front');
-        }
-        if ($request->has('small_front_image') && $this->isBase64($request->small_front_image)) {
-            $data['small_front_image'] = $this->saveImage($request->small_front_image, 'small-front');
-        }
-        if ($request->has('back_image') && $this->isBase64($request->back_image)) {
-            $data['back_image'] = $this->saveImage($request->back_image, 'back');
-        }
-        if ($request->has('left_sleeve_image') && $this->isBase64($request->left_sleeve_image)) {
-            $data['left_sleeve_image'] = $this->saveImage($request->left_sleeve_image, 'left-sleeve');
-        }
-        if ($request->has('right_sleeve_image') && $this->isBase64($request->right_sleeve_image)) {
-            $data['right_sleeve_image'] = $this->saveImage($request->right_sleeve_image, 'right-sleeve');
+        if ($request->has('design_config')) {
+            $designConfig = $this->prepareDesignConfig($request->design_config, $request->design_images ?? null);
+            $data['design_config'] = $designConfig;
+            $data['thumbnail_image'] = $this->firstImageFromConfig($designConfig) ?? $template->thumbnail_image;
         }
 
-        // Update thumbnail if any image was updated
-        if (isset($data['big_front_image']) || isset($data['small_front_image']) || 
-            isset($data['back_image']) || isset($data['left_sleeve_image']) || isset($data['right_sleeve_image'])) {
-            $data['thumbnail_image'] = $data['big_front_image'] ?? $data['small_front_image'] ?? 
-                                       $data['back_image'] ?? $data['left_sleeve_image'] ?? 
-                                       $data['right_sleeve_image'] ?? $template->thumbnail_image;
+        if ($request->has('colors')) {
+            $data['colors'] = $this->extractColorsFromRequest($request, $data['design_config'] ?? $template->design_config ?? []);
         }
 
         // If seller updates, reset status to PENDING
@@ -406,10 +325,13 @@ class TemplateController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        // Delete images from storage
-        if ($template->front_image) $this->deleteImage($template->front_image);
-        if ($template->back_image) $this->deleteImage($template->back_image);
-        if ($template->sleeve_image) $this->deleteImage($template->sleeve_image);
+        // Delete stored images (thumbnail + design images)
+        $designConfig = $this->normalizeDesignConfigValue($template->design_config);
+        $images = $designConfig['images'] ?? [];
+        foreach ($images as $url) {
+            $this->deleteImage($url);
+        }
+        $this->deleteImage($template->thumbnail_image);
 
         $template->delete();
 
@@ -443,6 +365,91 @@ class TemplateController extends Controller
             'message' => 'Template approved successfully.',
             'data' => $template
         ]);
+    }
+
+    private function normalizeDesignConfigValue($designConfig): array
+    {
+        if (is_string($designConfig)) {
+            $decoded = json_decode($designConfig, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+        return is_array($designConfig) ? $designConfig : [];
+    }
+
+    private function prepareDesignConfig($designConfig, $designImages = null): array
+    {
+        $config = $this->normalizeDesignConfigValue($designConfig);
+
+        // Merge any explicit images payload
+        if (is_array($designImages)) {
+            $config['images'] = array_merge($config['images'] ?? [], $designImages);
+        }
+
+        $processedImages = [];
+        foreach (($config['images'] ?? []) as $key => $value) {
+            // Keep the original map key for consistency with saved states/views
+            $safeTypeForFile = $this->sanitizeTypeKey((string) $key);
+            $processedImages[$key] = $this->processImageValue($value, $safeTypeForFile);
+        }
+        $config['images'] = $processedImages;
+
+        return $config;
+    }
+
+    private function processImageValue($imageData, string $type): ?string
+    {
+        if (!$imageData) {
+            return null;
+        }
+
+        if (is_string($imageData) && (str_starts_with($imageData, '/storage/') || str_starts_with($imageData, 'http'))) {
+            return $imageData;
+        }
+
+        if (is_string($imageData) && str_starts_with($imageData, 'data:')) {
+            return $this->saveImage($imageData, $type);
+        }
+
+        return null;
+    }
+
+    private function firstImageFromConfig(array $designConfig): ?string
+    {
+        foreach (($designConfig['images'] ?? []) as $url) {
+            if (!empty($url)) {
+                return $url;
+            }
+        }
+
+        return null;
+    }
+
+    private function extractColorsFromRequest(Request $request, array $designConfig): array
+    {
+        if (is_array($request->colors)) {
+            return $request->colors;
+        }
+
+        $decoded = json_decode($request->colors ?? '[]', true);
+        if (is_array($decoded) && !empty($decoded)) {
+            return $decoded;
+        }
+
+        if (!empty($designConfig['color']) && is_string($designConfig['color'])) {
+            return [$designConfig['color']];
+        }
+
+        return [];
+    }
+
+    private function sanitizeTypeKey(?string $type): string
+    {
+        $clean = strtolower($type ?? 'view');
+        $clean = preg_replace('/[^a-z0-9\\-_]+/', '-', $clean);
+        $clean = trim((string) $clean, '-_');
+        return $clean ?: 'view';
     }
 
     /**

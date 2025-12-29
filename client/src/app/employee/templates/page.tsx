@@ -18,17 +18,13 @@ import { AdminRejectModal } from "@/components/admin/AdminRejectModal";
 interface Template {
   id: number;
   title: string;
-  description: string;
-  thumbnail_image: string;
-  big_front_image: string;
-  small_front_image: string;
-  back_image: string;
-  left_sleeve_image: string;
-  right_sleeve_image: string;
-  design_config: string;
+  description?: string;
+  thumbnail_image?: string;
+  design_config?: any;
   status: string;
   created_at: string;
   updated_at: string;
+  user_id?: number;
   user: {
     name: string;
   };
@@ -113,9 +109,6 @@ export default function EmployeeTemplatesPage() {
             user_name: t.user?.name,
             images: {
               thumbnail: t.thumbnail_image,
-              big_front: t.big_front_image,
-              small_front: t.small_front_image,
-              back: t.back_image
             }
           });
         });
@@ -184,6 +177,24 @@ export default function EmployeeTemplatesPage() {
     if (!path) return undefined;
     if (path.startsWith('http')) return path;
     return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${path}`;
+  };
+
+  const parseDesignConfig = (config: any) => {
+    if (!config) return null;
+    if (typeof config === 'string') {
+      try {
+        return JSON.parse(config);
+      } catch {
+        return null;
+      }
+    }
+    return config;
+  };
+
+  const resolveThumbnail = (template: Template) => {
+    const parsed = parseDesignConfig(template.design_config);
+    const firstImage = parsed?.images ? (Object.values(parsed.images).find(Boolean) as string | undefined) : undefined;
+    return getImageUrl(template.thumbnail_image || firstImage || null);
   };
 
   const handleRejectConfirm = async (reason: string) => {
@@ -348,87 +359,90 @@ export default function EmployeeTemplatesPage() {
                   <TableCell colSpan={5} className="py-8 text-center text-gray-500">No templates found.</TableCell>
                 </TableRow>
               ) : (
-                filteredTemplates.map((template) => (
-                  <TableRow key={template.id}>
-                    <TableCell className="py-4">
-                      <div className="flex items-center gap-3">
-                        {template.thumbnail_image ? (
-                          <img
-                            src={getImageUrl(template.thumbnail_image)}
-                            alt={template.title}
-                            className="w-12 h-12 rounded object-cover border border-gray-200 dark:border-gray-700"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded bg-gray-100 dark:bg-gray-800"></div>
-                        )}
-                        <div>
-                          <p className="font-medium text-gray-800 text-sm dark:text-white/90">
-                            {template.title}
-                          </p>
-                          <p className="text-gray-500 text-xs dark:text-gray-400">
-                            {template.product?.name || 'Product'}
-                          </p>
+                filteredTemplates.map((template) => {
+                  const thumbUrl = resolveThumbnail(template);
+                  return (
+                    <TableRow key={template.id}>
+                      <TableCell className="py-4">
+                        <div className="flex items-center gap-3">
+                          {thumbUrl ? (
+                            <img
+                              src={thumbUrl}
+                              alt={template.title}
+                              className="w-12 h-12 rounded object-cover border border-gray-200 dark:border-gray-700"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded bg-gray-100 dark:bg-gray-800"></div>
+                          )}
+                          <div>
+                            <p className="font-medium text-gray-800 text-sm dark:text-white/90">
+                              {template.title}
+                            </p>
+                            <p className="text-gray-500 text-xs dark:text-gray-400">
+                              {template.product?.name || 'Product'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4 text-sm text-gray-600 dark:text-gray-400">
-                      {template.user?.name || template.user?.email || `User ID: ${template.user_id || 'N/A'}`}
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge
-                        size="sm"
-                        color={
-                          template.status === "APPROVED" ? "success" :
-                            template.status === "REJECTED" ? "error" : "warning"
-                        }
-                        variant="solid"
-                      >
-                        {template.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-4 text-gray-500 text-sm dark:text-gray-400">
-                      {new Date(template.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="py-4 text-end">
-                      <div className="flex items-center justify-end gap-2">
-                        {/* View Designs Button */}
-                        <button
-                          onClick={() => router.push(`/employee/templates/${template.id}/review`)}
-                          className="rounded-lg bg-blue-50 p-2 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30"
-                          title="View Designs"
+                      </TableCell>
+                      <TableCell className="py-4 text-sm text-gray-600 dark:text-gray-400">
+                        {template.user?.name || template.user?.email || `User ID: ${template.user_id || 'N/A'}`}
+                      </TableCell>
+                      <TableCell className="py-4">
+                        <Badge
+                          size="sm"
+                          color={
+                            template.status === "APPROVED" ? "success" :
+                              template.status === "REJECTED" ? "error" : "warning"
+                          }
+                          variant="solid"
                         >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
+                          {template.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="py-4 text-gray-500 text-sm dark:text-gray-400">
+                        {new Date(template.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="py-4 text-end">
+                        <div className="flex items-center justify-end gap-2">
+                          {/* View Designs Button */}
+                          <button
+                            onClick={() => router.push(`/employee/templates/${template.id}/review`)}
+                            className="rounded-lg bg-blue-50 p-2 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                            title="View Designs"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
 
-                        {template.status === 'PENDING' && (
-                          <>
-                            <button
-                              onClick={() => handleApprove(template.id)}
-                              className="rounded-lg bg-green-50 p-2 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30"
-                              title="Approve"
-                            >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => openRejectModal(template.id)}
-                              className="rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
-                              title="Reject"
-                            >
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                          {template.status === 'PENDING' && (
+                            <>
+                              <button
+                                onClick={() => handleApprove(template.id)}
+                                className="rounded-lg bg-green-50 p-2 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30"
+                                title="Approve"
+                              >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => openRejectModal(template.id)}
+                                className="rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                                title="Reject"
+                              >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class OrderController extends Controller
@@ -255,6 +256,19 @@ class OrderController extends Controller
             
             Log::info('Order created successfully:', ['order_id' => $order->id, 'order_number' => $order->order_number]);
 
+            // Award points to seller and referrer
+            $pointsPerOrder = (int) $this->getSetting('points_per_order', 10);
+            if ($pointsPerOrder > 0) {
+                $user->increment('points', $pointsPerOrder);
+            }
+            if ($user->referred_by_id) {
+                $referrer = User::find($user->referred_by_id);
+                $refBonus = (int) $this->getSetting('referral_points_referrer', 100);
+                if ($referrer && $refBonus > 0) {
+                    $referrer->increment('points', $refBonus);
+                }
+            }
+
             // Update customer statistics
             $customer->updateStats($totalAmount);
             Log::info('Customer stats updated');
@@ -381,6 +395,19 @@ class OrderController extends Controller
             'customer_phone' => $request->customer_phone,
             'shipping_address' => $request->shipping_address,
         ]);
+
+        // Award points for template-based orders
+        $pointsPerOrder = (int) $this->getSetting('points_per_order', 10);
+        if ($pointsPerOrder > 0) {
+            $user->increment('points', $pointsPerOrder);
+        }
+        if ($user->referred_by_id) {
+            $referrer = User::find($user->referred_by_id);
+            $refBonus = (int) $this->getSetting('referral_points_referrer', 100);
+            if ($referrer && $refBonus > 0) {
+                $referrer->increment('points', $refBonus);
+            }
+        }
 
         // Log status history
         /* $order->statusHistory()->create([
@@ -644,40 +671,27 @@ class OrderController extends Controller
                 $tempZipFile = tempnam(sys_get_temp_dir(), 'order_assets_');
                 
                 if ($zip->open($tempZipFile, \ZipArchive::CREATE) === TRUE) {
-                    
+
                     // 1. Add Placement Images (Mockups)
                     $template = $order->template;
-                    
-                    // Array of potential placement images
-                    $placements = [
-                        'Placements/front_big.png' => $template->big_front_image,
-                        'Placements/front_small.png' => $template->small_front_image,
-                        'Placements/back.png' => $template->back_image,
-                        'Placements/sleeve_left.png' => $template->left_sleeve_image,
-                        'Placements/sleeve_right.png' => $template->right_sleeve_image,
-                        'Placements/thumbnail.png' => $template->thumbnail_image
-                    ];
+                    $designConfig = $this->normalizeDesignConfig($template->design_config);
 
                     $hasPlacement = false;
-                    foreach ($placements as $name => $url) {
+                    foreach (($designConfig['images'] ?? []) as $key => $url) {
                         if ($url) {
-                            $this->addFileToZip($zip, $url, $name);
+                            $entryName = 'Placements/' . $this->sanitizeViewKey((string) $key) . '.png';
+                            $this->addFileToZip($zip, $url, $entryName);
                             $hasPlacement = true;
                         }
                     }
 
-                    // 2. Add High Quality Design
-                    // Parse design_config to find the high quality image
-                    $designConfig = $order->template->design_config;
-                    
-                    // If it's a string, decode it
-                    if (is_string($designConfig)) {
-                        $designConfig = json_decode($designConfig, true);
+                    if (!$hasPlacement && $template->thumbnail_image) {
+                        $this->addFileToZip($zip, $template->thumbnail_image, 'Placements/thumbnail.png');
                     }
 
-                    if (is_array($designConfig)) {
-                        $this->extractImagesFromConfig($zip, $designConfig, 'Designs/');
-                    }
+                    // 2. Add High Quality Design
+                    // Parse design_config to find the high quality image
+                    $this->extractImagesFromConfig($zip, $designConfig, 'Designs/');
 
                     $zip->close();
                     
@@ -697,6 +711,18 @@ class OrderController extends Controller
                 'error' => 'Failed to generate download: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    private function normalizeDesignConfig($designConfig): array
+    {
+        if (is_string($designConfig)) {
+            $decoded = json_decode($designConfig, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return is_array($designConfig) ? $designConfig : [];
     }
 
     /**
@@ -734,6 +760,14 @@ class OrderController extends Controller
         }
     }
 
+    private function sanitizeViewKey(string $key): string
+    {
+        $clean = strtolower($key);
+        $clean = preg_replace('/[^a-z0-9\\-_]+/', '-', $clean);
+        $clean = trim((string) $clean, '-_');
+        return $clean ?: 'view';
+    }
+
     /**
      * Helper to extract high quality images from design config
      */
@@ -742,6 +776,14 @@ class OrderController extends Controller
         // Recursively search for image sources
         $imageCount = 1;
         $objects = $config['objects'] ?? []; // Common Fabric.js structure
+
+        foreach (($config['images'] ?? []) as $key => $url) {
+            if ($url) {
+                $entryName = $folderPrefix . $this->sanitizeViewKey((string) $key) . '.png';
+                $this->addFileToZip($zip, $url, $entryName);
+                $imageCount++;
+            }
+        }
         
         // Also check direct sides if structured that way
         $sides = ['front', 'back', 'left', 'right', 'main'];
@@ -767,6 +809,17 @@ class OrderController extends Controller
                     $imageCount++;
                 }
             }
+        }
+    }
+
+    private function getSetting(string $key, $default = null)
+    {
+        try {
+            $value = DB::table('system_settings')->where('setting_key', $key)->value('setting_value');
+            return $value !== null ? $value : $default;
+        } catch (\Exception $e) {
+            Log::warning('Failed to read setting', ['key' => $key, 'error' => $e->getMessage()]);
+            return $default;
         }
     }
 }
