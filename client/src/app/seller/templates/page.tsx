@@ -14,6 +14,7 @@ interface Template {
   admin_feedback?: string;
   created_at: string;
   orders_count?: number; // Assuming backend appends this or we calculate
+  product_id: number;
 }
 
 export default function SellerTemplates() {
@@ -88,7 +89,8 @@ export default function SellerTemplates() {
   const handleEdit = (template: Template, e: React.MouseEvent) => {
     e.stopPropagation();
     console.log("Edit template", template.id);
-    router.push(`/seller/studio?id=${template.id}`);
+    // Redirect to product studio with template ID to edit
+    router.push(`/seller/studio?product=${template.product_id}&templateId=${template.id}`);
   }
 
   // Filter templates based on search and filters

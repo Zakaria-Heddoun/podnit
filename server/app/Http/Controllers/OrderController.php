@@ -146,14 +146,12 @@ class OrderController extends Controller
             'customer_phone' => 'required|string|max:20',
             'quantity' => 'required|integer|min:1',
             'selling_price' => 'required|numeric|min:0',
-            'customization' => 'required|array',
-            'customization.color' => 'required|string',
-            'customization.size' => 'required|string',
+            'selected_color' => 'required|string',
+            'selected_size' => 'required|string',
             'shipping_address' => 'required|array',
             'shipping_address.street' => 'required|string|max:255',
             'shipping_address.city' => 'required|string|max:100',
             'shipping_address.postal_code' => 'required|string|max:20',
-            'shipping_address.country' => 'required|string|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -180,16 +178,16 @@ class OrderController extends Controller
         Log::info('Product found:', ['id' => $product->id, 'name' => $product->name, 'available_colors' => $product->available_colors, 'available_sizes' => $product->available_sizes]);
         
         // Validate color and size options
-        if (!in_array($request->customization['color'], $product->available_colors)) {
-            Log::error('Invalid color selection:', ['requested' => $request->customization['color'], 'available' => $product->available_colors]);
+        if (!in_array($request->selected_color, $product->available_colors)) {
+            Log::error('Invalid color selection:', ['requested' => $request->selected_color, 'available' => $product->available_colors]);
             return response()->json([
                 'error' => 'Invalid color selection'
             ], 422);
         }
         Log::info('Color validation passed');
 
-        if (!in_array($request->customization['size'], $product->available_sizes)) {
-            Log::error('Invalid size selection:', ['requested' => $request->customization['size'], 'available' => $product->available_sizes]);
+        if (!in_array($request->selected_size, $product->available_sizes)) {
+            Log::error('Invalid size selection:', ['requested' => $request->selected_size, 'available' => $product->available_sizes]);
             return response()->json([
                 'error' => 'Invalid size selection'
             ], 422);
@@ -201,10 +199,49 @@ class OrderController extends Controller
         $sellingPrice = $request->selling_price; // This is what seller charges customer
         $totalAmount = $sellingPrice * $request->quantity;
         Log::info('Price calculated:', [
-            'base_price' => $unitPrice, 
-            'selling_price' => $sellingPrice, 
+            'base_price' => $unitPrice, 'selling_price' => $sellingPrice, 
             'quantity' => $request->quantity, 
             'total_amount' => $totalAmount
+        ]);
+
+        // Check if user has sufficient balance (product cost + packaging + shipping)
+        $productCost = $unitPrice * $request->quantity;
+        
+        // Add packaging cost if applicable
+        $totalCost = $productCost;
+        $includePackaging = filter_var($request->include_packaging ?? true, FILTER_VALIDATE_BOOLEAN);
+        if ($includePackaging) {
+            $packagingPrice = floatval($this->getSetting('packaging_price', 5.00));
+            $totalCost += ($packagingPrice * $request->quantity);
+        }
+        
+        // Add shipping cost
+        $city = $request->shipping_city ?? ($request->shipping_address['city'] ?? 'Casablanca');
+        $isCasablanca = strtolower(trim($city)) === 'casablanca';
+        if ($isCasablanca) {
+            $shippingPrice = floatval($this->getSetting('shipping_casablanca', 20.00));
+        } else {
+            $shippingPrice = floatval($this->getSetting('shipping_other', 40.00));
+        }
+        $totalCost += $shippingPrice;
+        
+        if ($user->balance < $totalCost) {
+            Log::error('Insufficient balance:', [
+                'user_balance' => $user->balance,
+                'required_total_cost' => $totalCost,
+                'product_cost' => $productCost,
+                'packaging' => $includePackaging ? ($packagingPrice * $request->quantity) : 0,
+                'shipping' => $shippingPrice
+            ]);
+            return response()->json([
+                'error' => 'Insufficient balance',
+                'message' => "You need {$totalCost} MAD but your balance is {$user->balance} MAD. Please top up your account."
+            ], 422);
+        }
+        Log::info('Balance check passed:', [
+            'user_balance' => $user->balance,
+            'total_cost' => $totalCost,
+            'product_cost' => $productCost
         ]);
 
         // Generate unique order number
@@ -239,40 +276,67 @@ class OrderController extends Controller
             
             Log::info('Attempting to create order...');
             
-            // Create order
-            $order = Order::create([
-                'user_id' => $user->id,
-                'customer_id' => $customer->id,
-                'product_id' => $product->id,
-                'template_id' => null, // Simple orders don't use templates
-                'order_number' => $orderNumber,
-                'customization' => $request->customization,
-                'quantity' => $request->quantity,
-                'unit_price' => $unitPrice, // What seller pays for the product
-                'selling_price' => $sellingPrice, // What seller charges customer
-                'total_amount' => $totalAmount,
-                'status' => 'PENDING',
-                'shipping_address' => $request->shipping_address,
-            ]);
-            
-            Log::info('Order created successfully:', ['order_id' => $order->id, 'order_number' => $order->order_number]);
+            // Deduct cost from seller's balance and create order in transaction
+            DB::transaction(function () use ($user, $customer, $orderNumber, $product, $request, $totalCost, $totalAmount, $unitPrice, $sellingPrice) {
+                // Create order
+                $order = Order::create([
+                    'user_id' => $user->id,
+                    'customer_id' => $customer->id,
+                    'product_id' => $product->id,
+                    'template_id' => null, // Simple orders don't use templates
+                    'order_number' => $orderNumber,
+                    'customization' => [
+                        'color' => $request->selected_color,
+                        'size' => $request->selected_size,
+                    ],
+                    'quantity' => $request->quantity,
+                    'unit_price' => $unitPrice, // What seller pays for the product
+                    'selling_price' => $sellingPrice, // What seller charges customer
+                    'total_amount' => $totalAmount,
+                    'status' => 'PENDING',
+                    'shipping_address' => $request->shipping_address,
+                ]);
+                
+                Log::info('Order created successfully:', ['order_id' => $order->id, 'order_number' => $order->order_number]);
 
-            // Award points to seller and referrer
-            $pointsPerOrder = (int) $this->getSetting('points_per_order', 10);
-            if ($pointsPerOrder > 0) {
-                $user->increment('points', $pointsPerOrder);
-            }
-            if ($user->referred_by_id) {
-                $referrer = User::find($user->referred_by_id);
-                $refBonus = (int) $this->getSetting('referral_points_referrer', 100);
-                if ($referrer && $refBonus > 0) {
-                    $referrer->increment('points', $refBonus);
+                // Deduct total cost from seller's balance
+                $user->decrement('balance', $totalCost);
+                
+                Log::info('Balance deducted:', [
+                    'cost_deducted' => $totalCost,
+                    'new_balance' => $user->fresh()->balance
+                ]);
+
+                // Award points to seller and referrer
+                $pointsPerOrder = (int) $this->getSetting('points_per_order', 10);
+                if ($pointsPerOrder > 0) {
+                    $user->increment('points', $pointsPerOrder);
                 }
-            }
+                
+                // Award referrer points only on seller's first order
+                if ($user->referred_by_id) {
+                    $isFirstOrder = Order::where('user_id', $user->id)->count() === 1;
+                    if ($isFirstOrder) {
+                        $referrer = User::find($user->referred_by_id);
+                        $refBonus = (int) $this->getSetting('referral_points_referrer', 100);
+                        if ($referrer && $refBonus > 0) {
+                            $referrer->increment('points', $refBonus);
+                            Log::info('Referrer bonus awarded for first order:', [
+                                'seller_id' => $user->id,
+                                'referrer_id' => $user->referred_by_id,
+                                'referrer_points' => $refBonus
+                            ]);
+                        }
+                    }
+                }
 
-            // Update customer statistics
-            $customer->updateStats($totalAmount);
-            Log::info('Customer stats updated');
+                // Update customer statistics
+                $customer->updateStats($totalAmount);
+                Log::info('Customer stats updated');
+            });
+
+            // Get the order after transaction
+            $order = Order::where('order_number', $orderNumber)->first();
 
             // Log status history
             /* try {
@@ -323,7 +387,6 @@ class OrderController extends Controller
             'shipping_address.street' => 'required|string|max:255',
             'shipping_address.city' => 'required|string|max:100',
             'shipping_address.postal_code' => 'required|string|max:20',
-            'shipping_address.country' => 'required|string|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -390,7 +453,10 @@ class OrderController extends Controller
                 // If there are any objects (stickers, text, etc.) in this view
                 if (!empty($objects)) {
                     $viewPrice = floatval($productView['price'] ?? 0);
-                    $unitPrice += $viewPrice;
+                    // Only add view price if it's greater than 0 (free views don't add cost)
+                    if ($viewPrice > 0) {
+                        $unitPrice += $viewPrice;
+                    }
                 }
             }
         }
@@ -414,42 +480,91 @@ class OrderController extends Controller
         }
         $totalAmount += $shippingPrice;
 
+        // Check if user has sufficient balance (product cost + packaging + shipping)
+        $productCost = $unitPrice * $request->quantity;
+        if ($user->balance < $totalAmount) {
+            Log::error('Insufficient balance:', [
+                'user_balance' => $user->balance,
+                'required_total_amount' => $totalAmount,
+                'product_cost' => $productCost,
+                'unit_price' => $unitPrice,
+                'quantity' => $request->quantity
+            ]);
+            return response()->json([
+                'error' => 'Insufficient balance',
+                'message' => "You need {$totalAmount} MAD but your balance is {$user->balance} MAD. Please top up your account."
+            ], 422);
+        }
+        Log::info('Balance check passed:', [
+            'user_balance' => $user->balance,
+            'total_amount' => $totalAmount,
+            'product_cost' => $productCost,
+            'unit_price' => $unitPrice,
+            'quantity' => $request->quantity
+        ]);
+
         // Generate unique order number
         $orderNumber = $this->generateOrderNumber();
 
-        // Create order
-        $order = Order::create([
-            'user_id' => $user->id,
-            'template_id' => $template->id,
-            'product_id' => $template->product_id,
-            'order_number' => $orderNumber,
-            'customization' => [
-                'color' => $request->selected_color,
-                'size' => $request->selected_size,
-                'design_config' => $template->design_config,
-            ],
-            'quantity' => $request->quantity,
-            'unit_price' => $unitPrice,
-            'total_amount' => $totalAmount,
-            'status' => 'PENDING',
-            'customer_name' => $request->customer_name,
-            'customer_email' => $request->customer_email,
-            'customer_phone' => $request->customer_phone,
-            'shipping_address' => $request->shipping_address,
-        ]);
+        // Deduct balance and create order in transaction
+        DB::transaction(function () use ($user, $template, $orderNumber, $request, $totalAmount, $unitPrice) {
+            // Create order
+            $order = Order::create([
+                'user_id' => $user->id,
+                'template_id' => $template->id,
+                'product_id' => $template->product_id,
+                'order_number' => $orderNumber,
+                'customization' => [
+                    'color' => $request->selected_color,
+                    'size' => $request->selected_size,
+                    'design_config' => $template->design_config,
+                ],
+                'quantity' => $request->quantity,
+                'unit_price' => $unitPrice,
+                'total_amount' => $totalAmount,
+                'status' => 'PENDING',
+                'customer_name' => $request->customer_name,
+                'customer_email' => $request->customer_email,
+                'customer_phone' => $request->customer_phone,
+                'shipping_address' => $request->shipping_address,
+            ]);
 
-        // Award points for template-based orders
-        $pointsPerOrder = (int) $this->getSetting('points_per_order', 10);
-        if ($pointsPerOrder > 0) {
-            $user->increment('points', $pointsPerOrder);
-        }
-        if ($user->referred_by_id) {
-            $referrer = User::find($user->referred_by_id);
-            $refBonus = (int) $this->getSetting('referral_points_referrer', 100);
-            if ($referrer && $refBonus > 0) {
-                $referrer->increment('points', $refBonus);
+            // Deduct total cost from seller's balance
+            $user->decrement('balance', $totalAmount);
+            
+            Log::info('Order created and balance deducted:', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'cost_deducted' => $totalAmount,
+                'new_balance' => $user->fresh()->balance
+            ]);
+
+            // Award points for template-based orders
+            $pointsPerOrder = (int) $this->getSetting('points_per_order', 10);
+            if ($pointsPerOrder > 0) {
+                $user->increment('points', $pointsPerOrder);
             }
-        }
+            
+            // Award referrer points only on seller's first order
+            if ($user->referred_by_id) {
+                $isFirstOrder = Order::where('user_id', $user->id)->count() === 1;
+                if ($isFirstOrder) {
+                    $referrer = User::find($user->referred_by_id);
+                    $refBonus = (int) $this->getSetting('referral_points_referrer', 100);
+                    if ($referrer && $refBonus > 0) {
+                        $referrer->increment('points', $refBonus);
+                        Log::info('Referrer bonus awarded for first order:', [
+                            'seller_id' => $user->id,
+                            'referrer_id' => $user->referred_by_id,
+                            'referrer_points' => $refBonus
+                        ]);
+                    }
+                }
+            }
+        });
+
+        // Get the order after transaction
+        $order = Order::where('order_number', $orderNumber)->first();
 
         // Log status history
         /* $order->statusHistory()->create([

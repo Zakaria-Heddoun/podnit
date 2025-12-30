@@ -870,21 +870,59 @@ export default function CreateOrderPage() {
                   <label className="mb-3 block text-sm font-medium text-black dark:text-white">
                     Color *
                   </label>
-                  <select
-                    name="selected_color"
-                    value={formData.selected_color}
-                    onChange={handleInputChange}
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors.selected_color ? 'border-red-500' : 'border-stroke'
-                      }`}
-                  >
-                    <option value="">Select Color</option>
-                    {orderType === 'product' && product?.available_colors.map(color => (
-                      <option key={color} value={color}>{color}</option>
-                    ))}
-                    {orderType === 'template' && ['White', 'Black', 'Navy', 'Gray', 'Red'].map(color => (
-                      <option key={color} value={color}>{color}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const dropdown = e.currentTarget.nextElementSibling as HTMLElement;
+                        dropdown?.classList.toggle('hidden');
+                      }}
+                      onBlur={(e) => {
+                        setTimeout(() => {
+                          const dropdown = e.currentTarget.nextElementSibling as HTMLElement;
+                          dropdown?.classList.add('hidden');
+                        }, 200);
+                      }}
+                      className={`w-full rounded border px-4 py-3 text-left flex items-center gap-3 bg-white dark:bg-meta-4 focus:border-gray-900 focus-visible:outline-none ${errors.selected_color ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
+                    >
+                      {formData.selected_color ? (
+                        <>
+                          <div 
+                            className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600 flex-shrink-0"
+                            style={{ backgroundColor: formData.selected_color }}
+                          />
+                          <span className="text-black dark:text-white">{formData.selected_color}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-500">Select Color</span>
+                      )}
+                      <svg className="ml-auto w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <div className="hidden absolute z-10 w-full mt-1 bg-white dark:bg-meta-4 border border-stroke dark:border-strokedark rounded shadow-lg max-h-60 overflow-y-auto">
+                      {(orderType === 'product' ? product?.available_colors || [] : ['White', 'Black', 'Navy', 'Gray', 'Red']).map(color => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleInputChange({ target: { name: 'selected_color', value: color } } as any);
+                            const dropdown = e.currentTarget.parentElement as HTMLElement;
+                            dropdown?.classList.add('hidden');
+                          }}
+                          className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-800 text-black dark:text-white"
+                        >
+                          <div 
+                            className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600 flex-shrink-0"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span>{color}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   {errors.selected_color && (
                     <p className="mt-1 text-sm text-red-500">{errors.selected_color}</p>
                   )}
@@ -1040,22 +1078,6 @@ export default function CreateOrderPage() {
                   {errors['shipping_address.postal_code'] && (
                     <p className="mt-1 text-sm text-red-500">{errors['shipping_address.postal_code']}</p>
                   )}
-                </div>
-
-                <div>
-                  <label className="mb-3 block text-sm font-medium text-black dark:text-white">
-                    Country *
-                  </label>
-                  <select
-                    name="shipping_address.country"
-                    value={formData.shipping_address.country}
-                    onChange={handleInputChange}
-                    className="w-full rounded border border-stroke px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900"
-                  >
-                    <option value="Morocco">Morocco</option>
-                    <option value="Algeria">Algeria</option>
-                    <option value="Tunisia">Tunisia</option>
-                  </select>
                 </div>
               </div>
             </div>
