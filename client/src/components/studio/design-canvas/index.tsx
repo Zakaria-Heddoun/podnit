@@ -195,116 +195,218 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
   React.useImperativeHandle(ref, () => ({
     getDesignData: async () => {
       const area = currentAreaRef.current;
-      if (canvasRef.current) {
-        const currentJson = JSON.stringify(canvasRef.current.toJSON());
-        // Use the React state as the base, updated with the current canvas snapshot
-        const updatedStates = {
-          ...canvasStates,
-          [area]: currentJson
-        };
-
-        const images: Record<string, string | null> = {};
-        const originalState = currentJson;
-
-        // LOCK to prevent events during export loop
-        isInternalOperationRef.current = true;
-
-        const loadState = (canvasObj: any, json: string) =>
-          new Promise<void>((resolve, reject) => {
-            canvasObj.clear();
-            if (!json || json === '') {
-              canvasObj.renderAll();
-              return resolve();
-            }
-            canvasObj.loadFromJSON(json, () => {
-              canvasObj.renderAll();
-              resolve();
-            }, (err: any) => reject(err));
-          });
-
-        for (const key of areaKeys) {
-          const state = updatedStates[key];
-          if (!state || state === '') {
-            images[key] = null;
-            continue;
-          }
-          try {
-            // During export, we temporarily load each state.
-            const printArea = effectivePrintAreas[key] || { width: 44, height: 60 };
-            if (canvasRef.current.setDimensions) {
-              const CANVAS_MARGIN = 40;
-              const baseWidth = 500;
-              const baseHeight = 600;
-
-              const targetWidth = (printArea.width / 100) * baseWidth + (CANVAS_MARGIN * 2);
-              const targetHeight = (printArea.height / 100) * baseHeight + (CANVAS_MARGIN * 2);
-
-              canvasRef.current.setDimensions({
-                width: isNaN(targetWidth) ? 300 : targetWidth,
-                height: isNaN(targetHeight) ? 400 : targetHeight
-              });
-              canvasRef.current.setViewportTransform([1, 0, 0, 1, CANVAS_MARGIN, CANVAS_MARGIN]);
-            }
-
-            await loadState(canvasRef.current, state);
-            images[key] = canvasRef.current.toDataURL({ format: 'png', multiplier: 4 });
-          } catch (e) {
-            console.error('Error exporting state', key, e);
-            images[key] = null;
-          }
-        }
-
-        // Restore active view state AND dimensions
-        const activeAreaConfig = effectivePrintAreas[area] || { width: 44, height: 60 };
-        const CANVAS_MARGIN = 40;
-        const baseWidth = 500;
-        const baseHeight = 600;
-
-        canvasRef.current.setDimensions({
-          width: ((activeAreaConfig.width || 44) / 100) * baseWidth + (CANVAS_MARGIN * 2),
-          height: ((activeAreaConfig.height || 60) / 100) * baseHeight + (CANVAS_MARGIN * 2)
-        });
-        canvasRef.current.setViewportTransform([1, 0, 0, 1, CANVAS_MARGIN, CANVAS_MARGIN]);
-
-        await loadState(canvasRef.current, originalState);
-
-        isInternalOperationRef.current = false;
-
+      if (!canvasRef.current) {
+        console.error('❌ No canvas reference available');
         return {
           designConfig: {
-            states: updatedStates,
+            states: canvasStates,
             color: selectedColor,
             views: views?.map(v => ({ key: v.key, name: v.name, area: v.area })),
           },
-          images
+          images: areaKeys.reduce((acc, key) => { acc[key] = null; return acc; }, {} as Record<string, string | null>)
         };
       }
 
+      // Step 1: Save the current canvas state for the active view
+      const currentJson = JSON.stringify(canvasRef.current.toJSON());
+      const updatedStates = {
+        ...canvasStatesRef.current,
+        [area]: currentJson
+      };
+
+      console.log('📤 Starting design export:', {
+        currentArea: area,
+        totalViews: areaKeys.length,
+        viewsWithState: Object.keys(updatedStates).filter(k => updatedStates[k] && updatedStates[k] !== ''),
+        canvasObjects: canvasRef.current.getObjects().length
+      });
+
+      // Log each state's content length to see if they're actually different
+      console.log('📊 States summary:');
+      areaKeys.forEach(key => {
+        const state = updatedStates[key];
+        console.log(`  ${key}: ${state ? `${state.length} chars, ${state === '' ? 'empty' : 'has data'}` : 'null/undefined'}`);
+      });
+
+      const images: Record<string, string | null> = {};
+      
+      // LOCK to prevent events during export
+      isInternalOperationRef.current = true;
+
+      // Helper to load a state onto the canvas
+      const loadState = (json: string): Promise<void> => {
+        return new Promise((resolve, reject) => {
+          if (!json || json === '') {
+            canvasRef.current.clear();
+            canvasRef.current.renderAll();
+            resolve();
+            return;
+          }
+          
+          try {
+            canvasRef.current.loadFromJSON(json, () => {
+              canvasRef.current.renderAll();
+              // Give it a moment to fully render
+              setTimeout(() => resolve(), 50);
+            }, (err: any) => {
+              console.error('Error loading JSON:', err);
+              reject(err);
+            });
+          } catch (e) {
+            reject(e);
+          }
+        });
+      };
+
+      // Store original canvas dimensions to restore later
+      const originalWidth = canvasRef.current.getWidth();
+      const originalHeight = canvasRef.current.getHeight();
+      const originalViewport = canvasRef.current.viewportTransform;
+
+      // Export each view's image
+      for (const viewKey of areaKeys) {
+        const state = updatedStates[viewKey];
+        
+        // Check if this view has any design
+        if (!state || state === '' || state === '{}') {
+          console.log(`⏭️ Skipping ${viewKey}: no design data`);
+          images[viewKey] = null;
+          continue;
+        }
+
+        try {
+          console.log(`\n📸 Exporting ${viewKey}...`);
+          
+          // Parse the state to check if it actually has objects
+          const stateObj = JSON.parse(state);
+          const objectCount = stateObj?.objects?.length || 0;
+          
+          if (objectCount === 0) {
+            console.log(`⏭️ Skipping ${viewKey}: state has no objects`);
+            images[viewKey] = null;
+            continue;
+          }
+          
+          console.log(`  └─ Loading state with ${objectCount} objects`);
+          
+          // CRITICAL: Set canvas dimensions to match this specific view's print area
+          // This ensures the exported image matches what the user designed
+          const viewPrintArea = effectivePrintAreas[viewKey] || { x: 28, y: 28, width: 44, height: 60 };
+          const CANVAS_MARGIN = 40;
+          const baseWidth = 500;
+          const baseHeight = 600;
+          
+          // Calculate the exact canvas dimensions for this view
+          const areaPxWidth = (viewPrintArea.width / 100) * baseWidth;
+          const areaPxHeight = (viewPrintArea.height / 100) * baseHeight;
+          const viewCanvasWidth = areaPxWidth + (CANVAS_MARGIN * 2);
+          const viewCanvasHeight = areaPxHeight + (CANVAS_MARGIN * 2);
+          
+          console.log(`  └─ Setting canvas to ${viewKey} dimensions: ${viewCanvasWidth}x${viewCanvasHeight}`);
+          
+          // Resize canvas to this view's dimensions
+          canvasRef.current.setDimensions({
+            width: viewCanvasWidth,
+            height: viewCanvasHeight
+          });
+          canvasRef.current.setViewportTransform([1, 0, 0, 1, CANVAS_MARGIN, CANVAS_MARGIN]);
+          
+          // Load this view's state onto the properly-sized canvas
+          await loadState(state);
+          
+          // Wait for render to complete
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Export the canvas as PNG with high quality
+          const dataURL = canvasRef.current.toDataURL({
+            format: 'png',
+            quality: 1.0,
+            multiplier: 2  // 2x resolution for better quality
+          });
+          
+          images[viewKey] = dataURL;
+          console.log(`  ✅ Exported successfully (${Math.round(dataURL.length / 1024)}KB, ${viewCanvasWidth}x${viewCanvasHeight})`);
+          
+        } catch (error) {
+          console.error(`  ❌ Error exporting ${viewKey}:`, error);
+          images[viewKey] = null;
+        }
+      }
+
+      // Restore original canvas dimensions
+      console.log(`\n🔄 Restoring original canvas dimensions: ${originalWidth}x${originalHeight}`);
+      canvasRef.current.setDimensions({
+        width: originalWidth,
+        height: originalHeight
+      });
+      canvasRef.current.setViewportTransform(originalViewport);
+
+      // Restore the original view's state
+      console.log(`\n🔄 Restoring original view: ${area}`);
+      await loadState(updatedStates[area] || '');
+      
+      isInternalOperationRef.current = false;
+
+      console.log('\n✅ Export complete:', {
+        totalViews: areaKeys.length,
+        successfulExports: Object.values(images).filter(img => img !== null).length,
+        exportedViews: Object.keys(images).filter(k => images[k] !== null)
+      });
+
       return {
         designConfig: {
-          states: canvasStates,
+          states: updatedStates,
           color: selectedColor,
           views: views?.map(v => ({ key: v.key, name: v.name, area: v.area })),
         },
-        images: areaKeys.reduce((acc, key) => { acc[key] = null; return acc; }, {} as Record<string, string | null>)
+        images
       };
     },
     loadDesignData: (designConfig: any) => {
+      console.log('📥 Loading design data into canvas:', {
+        hasStates: !!designConfig?.states,
+        hasColor: !!designConfig?.color,
+        hasViews: !!designConfig?.views,
+        stateKeys: designConfig?.states ? Object.keys(designConfig.states) : [],
+        currentArea: currentAreaRef.current,
+        areaKeys: areaKeys
+      });
+
       if (designConfig?.states) {
-        setCanvasStates(designConfig.states);
+        // Validate that states match the expected area keys
+        const stateKeys = Object.keys(designConfig.states);
+        const validStates: Record<string, string> = {};
+        
+        // Only load states that correspond to valid area keys
+        stateKeys.forEach(key => {
+          if (areaKeys.includes(key)) {
+            validStates[key] = designConfig.states[key];
+            console.log(`✅ Loading state for view: ${key}`);
+          } else {
+            console.warn(`⚠️ Skipping invalid state key: ${key} (not in areaKeys)`);
+          }
+        });
+
+        setCanvasStates(validStates);
         // Important: Update Ref too for sync access
-        canvasStatesRef.current = designConfig.states;
+        canvasStatesRef.current = validStates;
 
         const area = currentAreaRef.current;
-        const currentState = designConfig.states[area];
+        const currentState = validStates[area];
+        
         if (currentState && canvasRef.current) {
+          console.log(`📥 Loading canvas state for current area: ${area}`);
           isInternalOperationRef.current = true;
           canvasRef.current.loadFromJSON(currentState, () => {
             canvasRef.current.renderAll();
             isInternalOperationRef.current = false;
+            console.log(`✅ Canvas state loaded for: ${area}`);
           });
+        } else {
+          console.log(`ℹ️ No state found for current area: ${area}`);
         }
       }
+      
       if (designConfig?.color) {
         setSelectedColor(designConfig.color);
         setAvailableColors((prev) =>

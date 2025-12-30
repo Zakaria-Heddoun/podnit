@@ -134,24 +134,40 @@ function StudioContent() {
       if (!response.ok) throw new Error('Failed to load template');
 
       const data = await response.json();
-      console.log('Loaded template:', data);
+      console.log('📥 Loaded template data:', {
+        templateId: data.template?.id || data.data?.id,
+        title: data.template?.title || data.data?.title,
+        hasDesignConfig: !!(data.template?.design_config || data.data?.design_config)
+      });
 
-      if (data.template && data.template.design_config && canvasRef.current) {
+      const templateData = data.template || data.data;
+      
+      if (templateData && templateData.design_config && canvasRef.current) {
         try {
-          const config = typeof data.template.design_config === 'string'
-            ? JSON.parse(data.template.design_config)
-            : data.template.design_config;
+          const config = typeof templateData.design_config === 'string'
+            ? JSON.parse(templateData.design_config)
+            : templateData.design_config;
+
+          console.log('📥 Design config structure:', {
+            hasStates: !!config.states,
+            hasImages: !!config.images,
+            hasViews: !!config.views,
+            stateKeys: config.states ? Object.keys(config.states) : [],
+            imageKeys: config.images ? Object.keys(config.images) : [],
+            viewKeys: config.views ? config.views.map((v: any) => v.key) : []
+          });
 
           // Wait for canvas to be ready
           setTimeout(() => {
+            console.log('📥 Loading design data into canvas...');
             canvasRef.current?.loadDesignData(config);
           }, 500);
         } catch (e) {
-          console.error('Error parsing design config', e);
+          console.error('❌ Error parsing design config:', e);
         }
       }
     } catch (error) {
-      console.error('Error loading template:', error);
+      console.error('❌ Error loading template:', error);
       alert('Failed to load template details');
     } finally {
       setIsLoading(false);
@@ -181,16 +197,22 @@ function StudioContent() {
 
       // Upload each image separately (only if it's base64, skip if already a URL)
       for (const [key, data] of Object.entries(designData.images)) {
-        if (!data) continue;
+        if (!data) {
+          // Keep null values to maintain structure
+          imageUrls[key] = '';
+          continue;
+        }
         
         // If it's already a URL, use it directly
         if (typeof data === 'string' && !data.startsWith('data:')) {
           imageUrls[key] = data;
+          console.log(`✅ Using existing URL for ${key}:`, data.substring(0, 50) + '...');
           continue;
         }
 
         // Upload base64 image
         try {
+          console.log(`📤 Uploading image for view: ${key}`);
           const uploadResponse = await fetch(`${API_URL}/api/seller/templates/upload-image`, {
             method: 'POST',
             headers: {
@@ -200,7 +222,7 @@ function StudioContent() {
             },
             body: JSON.stringify({
               image: data,
-              type: key
+              type: key // Use the view key as the type to maintain mapping
             })
           });
 
@@ -209,7 +231,8 @@ function StudioContent() {
             imageUrls[key] = uploadResult.url;
             console.log(`✅ Uploaded ${key}:`, uploadResult.url);
           } else {
-            console.warn(`⚠️ Failed to upload ${key}, will try to process in template creation`);
+            const errorText = await uploadResponse.text();
+            console.warn(`⚠️ Failed to upload ${key}:`, errorText);
             // Fallback: will be processed in template creation
             imageUrls[key] = data;
           }
@@ -224,6 +247,15 @@ function StudioContent() {
         ...designData.designConfig,
         images: imageUrls,
       };
+
+      console.log('📤 Design config structure:', {
+        hasStates: !!designConfig.states,
+        hasImages: !!designConfig.images,
+        hasViews: !!designConfig.views,
+        stateKeys: designConfig.states ? Object.keys(designConfig.states) : [],
+        imageKeys: designConfig.images ? Object.keys(designConfig.images) : [],
+        viewKeys: designConfig.views ? designConfig.views.map((v: any) => v.key) : []
+      });
 
       // Step 2: Create template with image URLs (much smaller payload)
       console.log('📤 Step 2: Creating template with image URLs...');
@@ -338,7 +370,6 @@ function StudioContent() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleConfirmSave}
         isSaving={isSaving}
-        initialName={templateId ? "Updated Template" : ""}
       />
     </div>
   );

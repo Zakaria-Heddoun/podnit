@@ -139,6 +139,16 @@ class TemplateController extends Controller
             $colors = $this->extractColorsFromRequest($request, $designConfig);
             $thumbnailUrl = $this->firstImageFromConfig($designConfig);
             
+            // Log the views being saved for debugging
+            $viewKeys = array_keys($designConfig['images'] ?? []);
+            \Log::info('Template views being saved', [
+                'title' => $request->title,
+                'view_keys' => $viewKeys,
+                'view_count' => count($viewKeys),
+                'has_states' => isset($designConfig['states']),
+                'state_keys' => isset($designConfig['states']) ? array_keys($designConfig['states']) : []
+            ]);
+            
             // Try to increase max_allowed_packet for this session (if possible)
             try {
                 DB::statement("SET SESSION max_allowed_packet = 67108864"); // 64MB
@@ -269,8 +279,22 @@ class TemplateController extends Controller
         // Eager load relationships
         $template->load(['user', 'product']);
 
+        // Ensure design_config is properly decoded
+        $designConfig = $this->normalizeDesignConfigValue($template->design_config);
+        
+        // Log what's being returned for debugging
+        \Log::info('Template loaded', [
+            'template_id' => $template->id,
+            'title' => $template->title,
+            'has_states' => isset($designConfig['states']),
+            'has_images' => isset($designConfig['images']),
+            'view_keys' => isset($designConfig['images']) ? array_keys($designConfig['images']) : [],
+            'state_keys' => isset($designConfig['states']) ? array_keys($designConfig['states']) : []
+        ]);
+
         return response()->json([
             'success' => true,
+            'template' => $template,
             'data' => $template
         ]);
     }
@@ -389,9 +413,21 @@ class TemplateController extends Controller
 
         $processedImages = [];
         foreach (($config['images'] ?? []) as $key => $value) {
-            // Keep the original map key for consistency with saved states/views
+            // CRITICAL: Preserve the exact key (view identifier) to maintain view-to-image mapping
+            // The key should match the view identifier (e.g., 'big-front', 'back', 'left', 'right')
             $safeTypeForFile = $this->sanitizeTypeKey((string) $key);
-            $processedImages[$key] = $this->processImageValue($value, $safeTypeForFile);
+            
+            // Process and save image, ensuring it's associated with the correct view
+            $processedUrl = $this->processImageValue($value, $safeTypeForFile);
+            
+            // Only add to processed images if we successfully processed it
+            // Use the ORIGINAL key to maintain the mapping
+            if ($processedUrl !== null) {
+                $processedImages[$key] = $processedUrl;
+            } else {
+                // Keep null values to maintain structure
+                $processedImages[$key] = null;
+            }
         }
         $config['images'] = $processedImages;
 
@@ -404,14 +440,34 @@ class TemplateController extends Controller
             return null;
         }
 
+        // If it's already a URL (uploaded or existing), return it as-is
         if (is_string($imageData) && (str_starts_with($imageData, '/storage/') || str_starts_with($imageData, 'http'))) {
             return $imageData;
         }
 
+        // If it's base64 data, save it with the proper view identifier in the filename
         if (is_string($imageData) && str_starts_with($imageData, 'data:')) {
-            return $this->saveImage($imageData, $type);
+            $savedUrl = $this->saveImage($imageData, $type);
+            
+            if ($savedUrl) {
+                \Log::info('Processed image for view', [
+                    'view' => $type,
+                    'url' => $savedUrl,
+                    'data_length' => strlen($imageData)
+                ]);
+            }
+            
+            return $savedUrl;
         }
 
+        // Invalid format
+        \Log::warning('Invalid image data format', [
+            'view' => $type,
+            'data_type' => gettype($imageData),
+            'is_string' => is_string($imageData),
+            'starts_with' => is_string($imageData) ? substr($imageData, 0, 20) : 'N/A'
+        ]);
+        
         return null;
     }
 
