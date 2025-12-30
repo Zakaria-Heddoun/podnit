@@ -202,13 +202,91 @@ export default function EmployeeTemplateReviewPage() {
         }
     };
 
-    const handleDownload = (imageUrl: string | null, sideName: string) => {
-        if (!imageUrl) return;
+    const handleDownload = async (imageKey: string, sideName: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            
+            // Fetch image through authenticated API endpoint
+            const response = await fetch(`${API_URL}/api/seller/templates/${templateId}/download/${imageKey}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
 
-        const link = document.createElement('a');
-        link.download = `${template?.title || 'template'}-${sideName}.png`;
-        link.href = imageUrl;
-        link.click();
+            if (!response.ok) throw new Error('Failed to fetch image');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${template?.title || 'template'}-${sideName}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+        } catch (error) {
+            console.error('Download failed:', error);
+            toast({ title: 'Error', description: 'Failed to download image' });
+        }
+    };
+
+    const handleDownloadAll = async () => {
+        if (designImages.length === 0) return;
+
+        try {
+            const JSZip = (await import('jszip')).default;
+            const zip = new JSZip();
+            const templateName = template?.title || 'template';
+            const token = localStorage.getItem('token');
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+            // Fetch all images through authenticated API endpoint
+            for (const side of designImages) {
+                if (!side.key) continue;
+                
+                try {
+                const response = await fetch(`${API_URL}/api/seller/templates/${templateId}/download/${side.key}`, {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (!response.ok) {
+                        console.error(`Failed to fetch ${side.key}:`, response.status);
+                        continue;
+                    }
+
+                    const blob = await response.blob();
+                    zip.file(`${templateName}-${side.key}.png`, blob);
+                    
+                } catch (error) {
+                    console.error(`Failed to add ${side.key} to zip:`, error);
+                    // Continue with other images even if one fails
+                }
+            }
+
+            // Check if we have any files in the zip
+            const files = Object.keys(zip.files);
+            if (files.length === 0) {
+                toast({ title: 'Error', description: 'No images could be added to the zip file. Please try downloading individually.' });
+                return;
+            }
+
+            // Generate and download the zip
+            const content = await zip.generateAsync({ type: 'blob' });
+            const url = window.URL.createObjectURL(content);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${templateName}-all-views.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Zip download failed:', error);
+            toast({ title: 'Error', description: 'Failed to download zip file. Please try downloading images individually.' });
+        }
     };
 
     if (isLoading) {
@@ -277,6 +355,19 @@ export default function EmployeeTemplateReviewPage() {
 
             {/* Design Images Grid */}
             <div className="mx-auto max-w-screen-2xl p-6">
+                {designImages.length > 0 && (
+                    <div className="mb-4 flex justify-end">
+                        <button
+                            onClick={handleDownloadAll}
+                            className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700 transition-colors"
+                        >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Download All as ZIP
+                        </button>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {designImages.map((side) => {
                         const imageUrl = side.url;
@@ -293,7 +384,7 @@ export default function EmployeeTemplateReviewPage() {
                                         {side.name}
                                     </h3>
                                     <button
-                                        onClick={() => handleDownload(imageUrl, side.key)}
+                                        onClick={() => handleDownload(side.key, side.name)}
                                         className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition-colors"
                                     >
                                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

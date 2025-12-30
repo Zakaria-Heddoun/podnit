@@ -366,6 +366,67 @@ class TemplateController extends Controller
     }
 
     /**
+     * Download a specific template image with proper CORS headers
+     */
+    public function downloadImage(Request $request, $templateId, $imageKey)
+    {
+        \Log::info('Download image request', [
+            'template_id' => $templateId,
+            'image_key' => $imageKey,
+            'user_id' => Auth::id()
+        ]);
+        
+        $user = Auth::user();
+        
+        // Verify user has permission (admin, employee with permission, or template owner)
+        $template = Template::findOrFail($templateId);
+        
+        if ($user->role !== 'admin' && !$user->hasPermission('approve_templates') && $user->id !== $template->user_id) {
+            \Log::error('Unauthorized download attempt', ['user_id' => $user->id, 'template_id' => $templateId]);
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $designConfig = $this->normalizeDesignConfigValue($template->design_config);
+        $imagePath = $designConfig['images'][$imageKey] ?? null;
+        
+        \Log::info('Design config check', [
+            'image_path' => $imagePath,
+            'has_images' => isset($designConfig['images']),
+            'image_keys' => isset($designConfig['images']) ? array_keys($designConfig['images']) : []
+        ]);
+        
+        if (!$imagePath) {
+            return response()->json(['error' => 'Image not found'], 404);
+        }
+
+        // Handle both full URLs and relative paths
+        if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+            // Extract path from full URL
+            $imagePath = parse_url($imagePath, PHP_URL_PATH);
+        }
+        
+        // Remove leading slash and 'storage/' prefix if present
+        $imagePath = ltrim($imagePath, '/');
+        $imagePath = preg_replace('/^storage\//', '', $imagePath);
+        
+        // Check if file exists in storage
+        if (!Storage::disk('public')->exists($imagePath)) {
+            \Log::error("Template image not found: {$imagePath}");
+            return response()->json(['error' => 'File not found on server'], 404);
+        }
+
+        $file = Storage::disk('public')->get($imagePath);
+        $mimeType = Storage::disk('public')->mimeType($imagePath);
+
+        return response($file, 200)
+            ->header('Content-Type', $mimeType)
+            ->header('Content-Disposition', 'attachment; filename="' . basename($imagePath) . '"')
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            ->header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept');
+    }
+
+    /**
      * Approve the specified template.
      */
     public function approve(Template $template)

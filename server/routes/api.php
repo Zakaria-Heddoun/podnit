@@ -170,6 +170,7 @@ Route::middleware(['auth:sanctum', 'seller'])->prefix('seller')->group(function 
     Route::get('/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'show']);
     Route::put('/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'update']);
     Route::delete('/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'destroy']);
+    Route::get('/templates/{template}/download/{imageKey}', [\App\Http\Controllers\TemplateController::class, 'downloadImage']);
 
     // Settings
     Route::get('/settings', [\App\Http\Controllers\SystemSettingsController::class, 'index']);
@@ -179,6 +180,7 @@ Route::middleware(['auth:sanctum', 'seller'])->prefix('seller')->group(function 
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
     Route::get('/templates', [\App\Http\Controllers\TemplateController::class, 'index']); // Added index route for admin
     Route::get('/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'show']); // Show single template
+    Route::get('/templates/{template}/download/{imageKey}', [\App\Http\Controllers\TemplateController::class, 'downloadImage']);
     Route::put('/templates/{template}/approve', [\App\Http\Controllers\TemplateController::class, 'approve']);
     Route::put('/templates/{template}/reject', [\App\Http\Controllers\TemplateController::class, 'reject']);
     // ... existing admin routes are defined above in a separate group, merging logically here or keeping separate
