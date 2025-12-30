@@ -43,6 +43,9 @@ class SystemSettingsSeeder extends Seeder
                 ]),
                 'description' => 'Available colors for the studio canvas background',
             ],
+            ['setting_key' => 'packaging_price', 'setting_value' => '5.00', 'description' => 'Default price for packaging'],
+            ['setting_key' => 'shipping_casablanca', 'setting_value' => '20.00', 'description' => 'Shipping price for Casablanca'],
+            ['setting_key' => 'shipping_other', 'setting_value' => '40.00', 'description' => 'Shipping price for cities other than Casablanca'],
         ];
 
         foreach ($settings as $setting) {

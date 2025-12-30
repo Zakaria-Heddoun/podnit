@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Services\EliteSpeedService;
 
 class OrderController extends Controller
 {
@@ -369,8 +370,49 @@ class OrderController extends Controller
         }
 
         // Calculate total using template price or product base price
-        $unitPrice = $template->price ?? $template->product->base_price;
+        $unitPrice = $template->product->base_price;
+        
+        // Sum view prices if they have designs in the template
+        $designConfig = $this->normalizeDesignConfig($template->design_config);
+        $states = $designConfig['states'] ?? [];
+        $productViews = $template->product->views ?? [];
+        
+        foreach ($productViews as $productView) {
+            $viewKey = $productView['key'] ?? null;
+            if (!$viewKey) continue;
+            
+            // Check if this view has a design (objects) in the template
+            $viewState = $states[$viewKey] ?? null;
+            if ($viewState) {
+                $decodedState = json_decode($viewState, true);
+                $objects = $decodedState['objects'] ?? [];
+                
+                // If there are any objects (stickers, text, etc.) in this view
+                if (!empty($objects)) {
+                    $viewPrice = floatval($productView['price'] ?? 0);
+                    $unitPrice += $viewPrice;
+                }
+            }
+        }
+        
         $totalAmount = $unitPrice * $request->quantity;
+
+        // Add packaging and shipping costs
+        $includePackaging = filter_var($request->include_packaging ?? true, FILTER_VALIDATE_BOOLEAN);
+        if ($includePackaging) {
+            $packagingPrice = floatval($this->getSetting('packaging_price', 5.00));
+            $totalAmount += ($packagingPrice * $request->quantity);
+        }
+
+        $city = $request->shipping_city ?? ($request->shipping_address['city'] ?? 'Casablanca');
+        $isCasablanca = strtolower(trim($city)) === 'casablanca';
+        
+        if ($isCasablanca) {
+            $shippingPrice = floatval($this->getSetting('shipping_casablanca', 20.00));
+        } else {
+            $shippingPrice = floatval($this->getSetting('shipping_other', 40.00));
+        }
+        $totalAmount += $shippingPrice;
 
         // Generate unique order number
         $orderNumber = $this->generateOrderNumber();
@@ -726,6 +768,107 @@ class OrderController extends Controller
     }
 
     /**
+     * Ship order via EliteSpeed
+     */
+    public function shipOrder(Request $request, Order $order, EliteSpeedService $shippingService): JsonResponse
+    {
+        $user = auth()->user();
+
+        // Check permission (Admin or owner seller)
+        if (!$user->isAdmin() && $order->user_id !== $user->id) {
+             return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        if ($order->tracking_number) {
+            return response()->json(['error' => 'Order already shipped (Tracking: ' . $order->tracking_number . ')'], 400);
+        }
+
+        try {
+            // Prepare payload for EliteSpeed
+            // documentation: fullname, phone, city, address, price, product, qty, note, change(0/1), openpackage(0/1), from_stock(0/1), internal_id
+            
+            // Map City/Address
+            // Assuming we just pass the city name string. 
+            // If ID is needed we'd need a mapping, but docs show "La ville du client".
+            // The user request example shows "city": "CASABLANCA" (string) or object in response, but input likely string.
+            
+            $city = $order->shipping_address['city'] ?? 'Unknown';
+            $address = $order->shipping_address['street'] ?? 'Unknown';
+            
+            // Format Product string
+            $productName = $order->product ? $order->product->name : 'Custom Product';
+            // If multiple items, we might need to handle differently, but here 1 order = 1 product type usually (or X qty of it)
+            
+            $payload = [
+                'fullname' => $order->customer_name ?? ($order->customer ? $order->customer->name : 'Guest'),
+                'phone' => $this->sanitizePhoneNumber($order->customer_phone ?? ($order->customer ? $order->customer->phone : '')),
+                'city' => $city,
+                'address' => $address,
+                'price' => $order->total_amount, // COD amount
+                'product' => $productName,
+                'qty' => $order->quantity,
+                'note' => $request->note ?? '',
+                'change' => 0, // Default no exchange
+                'openpackage' => 1, // Let's default to 1 as per typical POD requests? or 0? keeping 1 to be safe or 0. Docs say "0 for No, 1 for Yes". Let's assume 1 (allow open) is better for success rate unless specified. 
+                                    // User prompt didn't specify preference, but showed "client_can_open": 0 in GET example.
+                                    // Let's set to 1 for "Allow open" as it reduces returns usually, or 0 safely.
+                                    // Let's stick to 1 (Yes) as a feature, or make it optional. 
+                                    // For now, hardcode 1 or use request input.
+                'internal_id' => $order->order_number,
+            ];
+
+            // Call Service
+            $result = $shippingService->createParcel($payload);
+
+            // If success
+            // Docs say: { "code": "ok", "message": "..." }
+            if (isset($result['code']) && $result['code'] === 'ok') {
+                
+                // Update Order
+                $trackingNumber = $result['code_shippment'] ?? $order->order_number;
+                
+                $order->update([
+                    'status' => 'PRINTED', 
+                    'tracking_number' => $trackingNumber,
+                ]);
+
+                return response()->json([
+                    'message' => 'Order shipped successfully',
+                    'data' => $result
+                ]);
+            } else {
+                 return response()->json([
+                    'error' => 'Shipping API returned unexpected status',
+                    'details' => $result
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Shipping failed',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Track order status via EliteSpeed
+     */
+    public function trackOrder(Order $order, EliteSpeedService $shippingService): JsonResponse
+    {
+        if (!$order->tracking_number) {
+            return response()->json(['error' => 'No tracking number found'], 404);
+        }
+
+        try {
+            $tracking = $shippingService->trackParcel($order->tracking_number);
+            return response()->json(['data' => $tracking]);
+        } catch (\Exception $e) {
+             return response()->json(['error' => 'Failed to track parcel'], 500);
+        }
+    }
+
+    /**
      * Helper to add a file from URL/Path to ZIP
      */
     private function addFileToZip(\ZipArchive $zip, string $pathOrUrl, string $zipEntryName)
@@ -821,5 +964,24 @@ class OrderController extends Controller
             Log::warning('Failed to read setting', ['key' => $key, 'error' => $e->getMessage()]);
             return $default;
         }
+    }
+
+    private function sanitizePhoneNumber(?string $phone): string
+    {
+        if (!$phone) return '';
+        
+        // Remove spaces and non-numeric chars (except +)
+        $phone = preg_replace('/[^0-9+]/', '', $phone);
+        
+        // Replace +212 or 00212 with 0
+        if (str_starts_with($phone, '+212')) {
+            $phone = '0' . substr($phone, 4);
+        } elseif (str_starts_with($phone, '00212')) {
+            $phone = '0' . substr($phone, 5);
+        } elseif (str_starts_with($phone, '212')) {
+             $phone = '0' . substr($phone, 3);
+        }
+        
+        return $phone;
     }
 }

@@ -46,6 +46,10 @@ interface OrderDetail {
     };
     created_at: string;
     updated_at: string;
+    customer_name?: string;
+    customer_email?: string;
+    customer_phone?: string;
+    tracking_number?: string;
 }
 
 export default function AdminOrderDetailPage() {
@@ -55,8 +59,34 @@ export default function AdminOrderDetailPage() {
 
     const [order, setOrder] = useState<OrderDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const [shippingLoading, setShippingLoading] = useState(false);
 
-    // Fetch order details from API
+    const [trackingData, setTrackingData] = useState<any[] | null>(null);
+
+    // Fetch tracking info if available
+    useEffect(() => {
+        if (!order?.tracking_number) return;
+
+        const fetchTracking = async () => {
+            try {
+                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_URL}/api/admin/orders/${order.id}/track`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.data && json.data.data) {
+                        setTrackingData(json.data.data);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch tracking details", err);
+            }
+        };
+        fetchTracking();
+    }, [order?.tracking_number, order?.id]);
+
     useEffect(() => {
         const fetchOrderDetails = async () => {
             setLoading(true);
@@ -102,6 +132,46 @@ export default function AdminOrderDetailPage() {
             fetchOrderDetails();
         }
     }, [orderId, router]);
+
+    const handleShipOrder = async () => {
+        if (!order) return;
+        if (!confirm('Are you sure you want to create a parcel in EliteSpeed for this order?')) return;
+
+        setShippingLoading(true);
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const token = localStorage.getItem('token');
+
+            const response = await fetch(`${API_URL}/api/admin/orders/${order.id}/ship`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ note: '' })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(`Order shipped successfully! Tracking Code: ${result.data?.code_shippment || 'N/A'}`);
+                // Update local state
+                setOrder(prev => prev ? ({
+                    ...prev,
+                    status: 'PRINTED',
+                    // tracking_number: result.data?.code_shippment // Add to types if needed, but status update is key
+                }) : null);
+            } else {
+                alert('Shipping Failed: ' + (result.error || result.message || 'Unknown error'));
+                console.error('Shipping error:', result);
+            }
+        } catch (error) {
+            console.error('Error shipping order:', error);
+            alert('An error occurred while shipping the order.');
+        } finally {
+            setShippingLoading(false);
+        }
+    };
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -354,10 +424,18 @@ export default function AdminOrderDetailPage() {
                     </Button>
                 )}
                 <Button
-                    onClick={() => window.print()}
-                    className="bg-gray-600 hover:bg-gray-700"
+                    onClick={handleShipOrder}
+                    disabled={shippingLoading || order.status === 'PRINTED' || order.status === 'SHIPPED'}
+                    className={`${order.status === 'PRINTED' || order.status === 'SHIPPED'
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
+                        } text-white`}
                 >
-                    Print Order
+                    {shippingLoading ? 'Shipping...' : (
+                        order.status === 'PRINTED' || order.status === 'SHIPPED'
+                            ? (order.tracking_number ? `Shipped (${order.tracking_number})` : 'Order Shipped')
+                            : 'Ship & Print Label'
+                    )}
                 </Button>
             </div>
         </div>

@@ -30,6 +30,9 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
 
   const [containerSize, setContainerSize] = React.useState({ width: 500, height: 600 });
 
+  // Margin for handles to be visible outside the printable area
+  const CANVAS_MARGIN = 40;
+
   useEffect(() => {
     const activeMockup = mockups[currentArea] || '/images/tshirt-template.png';
     const img = new Image();
@@ -52,11 +55,23 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
     height: (activeAreaConfig.height / 100) * containerSize.height,
   };
 
+  const onCanvasReadyRef = useRef(onCanvasReady);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+
+  useEffect(() => {
+    onCanvasReadyRef.current = onCanvasReady;
+  }, [onCanvasReady]);
+
+  useEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
+
   useEffect(() => {
     if (canvasRef.current && !fabricCanvasRef.current) {
+      // Create canvas with 40px margin on all sides
       const canvas = new fabric.Canvas(canvasRef.current, {
-        width: areaPx.width,
-        height: areaPx.height,
+        width: areaPx.width + (CANVAS_MARGIN * 2),
+        height: areaPx.height + (CANVAS_MARGIN * 2),
         backgroundColor: 'transparent',
         selection: true,
         preserveObjectStacking: true,
@@ -64,25 +79,55 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         controlsAboveOverlay: true,
       });
 
-      // Configure default object controls
-      fabric.Object.prototype.set({
+      // Shift the viewport so that (0,0) in object coordinates is at (CANVAS_MARGIN, CANVAS_MARGIN) in pixels
+      canvas.setViewportTransform([1, 0, 0, 1, CANVAS_MARGIN, CANVAS_MARGIN]);
+
+      // Configure default object controls globally
+      Object.assign(fabric.Object.prototype, {
         transparentCorners: false,
         cornerColor: '#ffffff',
         cornerStrokeColor: '#000000',
-        borderColor: '#000000',
-        cornerSize: 10,
-        padding: 5,
+        borderColor: '#2563eb',
+        cornerSize: 14,
+        padding: 20, // 20px padding moves handles out of the object border
         cornerStyle: 'circle',
         borderDashArray: [4, 4],
+        hasControls: true,
       });
 
-      // Constrain drawing area to the print zone
+      // Helper function to ensure all controls are visible and styled
+      const enableAllControls = (obj: any) => {
+        if (obj && obj.setControlsVisibility) {
+          obj.set({
+            cornerStyle: 'circle',
+            cornerColor: '#ffffff',
+            cornerStrokeColor: '#000000',
+            borderColor: '#2563eb',
+            cornerSize: 14,
+            transparentCorners: false,
+            padding: 20,
+            borderDashArray: [4, 4],
+          });
+
+          obj.setControlsVisibility({
+            tl: true, tr: true, bl: true, br: true,
+            ml: true, mt: true, mr: true, mb: true,
+            mtr: true
+          });
+        }
+      };
+
+      canvas.on('object:added', (e) => {
+        enableAllControls(e.target);
+      });
+
+      // Clip Path should also be at (0,0) in transformed space
       const clipPath = new fabric.Rect({
         left: 0,
         top: 0,
         width: areaPx.width,
         height: areaPx.height,
-        absolutePositioned: true,
+        absolutePositioned: false, // Relative to viewport/transformed space
         fill: 'transparent',
         stroke: 'transparent',
         selectable: false,
@@ -91,68 +136,87 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
       canvas.clipPath = clipPath;
 
       fabricCanvasRef.current = canvas;
-      onCanvasReady(canvas);
+      onCanvasReadyRef.current(canvas);
       canvas.renderAll();
 
-      // Set up selection events
+      // Configure ActiveSelection styling
+      Object.assign(fabric.ActiveSelection.prototype, {
+        transparentCorners: false,
+        cornerColor: '#ffffff',
+        cornerStrokeColor: '#000000',
+        borderColor: '#2563eb',
+        cornerSize: 14,
+        padding: 20,
+        cornerStyle: 'circle',
+        borderDashArray: [4, 4],
+        hasControls: true,
+      });
+
       canvas.on('selection:created', (e) => {
+        const activeObject = canvas.getActiveObject();
+        if (activeObject) {
+          enableAllControls(activeObject);
+          if (activeObject.type === 'activeSelection') {
+            (activeObject as any)._objects?.forEach((obj: any) => enableAllControls(obj));
+          }
+        }
         if (e.selected && e.selected[0]) {
-          onSelectionChange(e.selected[0]);
+          onSelectionChangeRef.current(e.selected[0]);
         }
       });
 
       canvas.on('selection:updated', (e) => {
         if (e.selected && e.selected[0]) {
-          onSelectionChange(e.selected[0]);
+          e.selected.forEach(obj => enableAllControls(obj));
+          onSelectionChangeRef.current(e.selected[0]);
         }
       });
 
       canvas.on('selection:cleared', () => {
-        onSelectionChange(null);
+        onSelectionChangeRef.current(null);
       });
 
-      // Enable text editing on double click
       canvas.on('mouse:dblclick', (e) => {
         const target = e.target;
-        if (target && target.type === 'text') {
+        if (target && target.type === 'textbox') {
           canvas.setActiveObject(target);
           (target as any).enterEditing();
           (target as any).selectAll();
         }
       });
 
-      // Save canvas state after text editing
       canvas.on('text:editing:exited', () => {
         canvas.renderAll();
-        // Trigger a custom event to save state
         canvas.fire('text:changed');
       });
+
+      return () => {
+        if (fabricCanvasRef.current) {
+          fabricCanvasRef.current.dispose();
+          fabricCanvasRef.current = null;
+        }
+      };
     }
+  }, []);
 
-    return () => {
-      if (fabricCanvasRef.current) {
-        fabricCanvasRef.current.dispose();
-        fabricCanvasRef.current = null;
-      }
-    };
-  }, [currentArea, onCanvasReady, onSelectionChange, areaPx.height, areaPx.width]);
-
-  // Update canvas dimensions and clip path when area changes
+  // Update canvas dimensions when area changes
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
     canvas.setDimensions({
-      width: areaPx.width,
-      height: areaPx.height
+      width: areaPx.width + (CANVAS_MARGIN * 2),
+      height: areaPx.height + (CANVAS_MARGIN * 2)
     });
+
+    canvas.setViewportTransform([1, 0, 0, 1, CANVAS_MARGIN, CANVAS_MARGIN]);
 
     const clipPath = new fabric.Rect({
       left: 0,
       top: 0,
       width: areaPx.width,
       height: areaPx.height,
-      absolutePositioned: true,
+      absolutePositioned: false,
       fill: 'transparent',
       stroke: 'transparent',
       selectable: false,
@@ -179,15 +243,16 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
           }}
         />
 
-        {/* Canvas Wrapper positioned to print area */}
+        {/* Canvas Wrapper positioned with offset to account for margin */}
         <div
-          className="absolute rounded-lg"
+          className="absolute"
           style={{
-            top: `${areaPx.y}px`,
-            left: `${areaPx.x}px`,
-            width: `${areaPx.width}px`,
-            height: `${areaPx.height}px`,
+            top: `${areaPx.y - CANVAS_MARGIN}px`,
+            left: `${areaPx.x - CANVAS_MARGIN}px`,
+            width: `${areaPx.width + (CANVAS_MARGIN * 2)}px`,
+            height: `${areaPx.height + (CANVAS_MARGIN * 2)}px`,
             zIndex: 10,
+            overflow: 'visible' // Ensure handles can seen
           }}
         >
           <canvas
@@ -200,7 +265,7 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
           />
         </div>
 
-        {/* Printable Area Outline */}
+        {/* Printable Area Outline (stays exactly at areaPx) */}
         <div
           className="absolute border-2 border-dashed border-gray-400 rounded-md pointer-events-none"
           style={{

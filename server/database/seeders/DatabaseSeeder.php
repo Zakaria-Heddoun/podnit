@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             SystemSettingsSeeder::class,
             ProductsSeeder::class,
             \Database\Seeders\RoleSeeder::class,
+            \Database\Seeders\AdminUserSeeder::class,
         ]);
     }
 }

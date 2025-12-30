@@ -5,8 +5,6 @@ import * as fabric from 'fabric';
 import TShirtMockup from './components/TShirtMockup';
 import FloatingToolbar from './components/FloatingToolbar';
 
-// ... existing imports ...
-
 export interface DesignCanvasRef {
   getDesignData: () => Promise<{
     designConfig: any;
@@ -39,6 +37,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
     if (views && views.length > 0) return views.map(v => v.key);
     return ['big-front', 'small-front', 'back', 'left', 'right'];
   }, [views]);
+
   const areaDisplay = React.useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     if (views && views.length > 0) {
@@ -58,6 +57,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
   const [selectedColor, setSelectedColor] = useState(resolvedColors[0] || '#FFFFFF');
   const [selectedElement, setSelectedElement] = useState<any>(null);
   const [availableColors, setAvailableColors] = useState<string[]>(resolvedColors);
+
   const effectivePrintAreas = React.useMemo(() => {
     const map: Record<string, { x: number; y: number; width: number; height: number }> = {};
     if (printAreas) {
@@ -73,7 +73,6 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
     return map;
   }, [printAreas, views]);
 
-  // Separate canvas states for each side (dynamic)
   const initStates = React.useMemo(() => {
     const map: Record<string, string> = {};
     areaKeys.forEach(k => { map[k] = ''; });
@@ -98,12 +97,58 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
 
   const canvasRef = useRef<any>(null);
 
+  // Synchronous clones of state for use in event listeners and during switches
+  const isInitializedRef = useRef(false);
+  const isInternalOperationRef = useRef(false);
+  const prevAreaKeysRef = useRef<string[]>([]);
+  const currentAreaRef = useRef(currentArea);
+  const canvasStatesRef = useRef(canvasStates);
+  const historyIndicesRef = useRef(historyIndices);
+
+  // Sync refs with state
+  useEffect(() => { currentAreaRef.current = currentArea; }, [currentArea]);
+  useEffect(() => { canvasStatesRef.current = canvasStates; }, [canvasStates]);
+  useEffect(() => { historyIndicesRef.current = historyIndices; }, [historyIndices]);
+
   useEffect(() => {
-    setCurrentArea(areaKeys[0] || 'big-front');
-    setCanvasStates(initStates);
-    setCanvasHistories(initHistories);
-    setHistoryIndices(initHistoryIdx);
-  }, [areaKeys, initHistories, initHistoryIdx, initStates]);
+    // Only re-initialize if we've NEVER initialized OR if areaKeys have fundamentally changed
+    const keysChanged = JSON.stringify(areaKeys) !== JSON.stringify(prevAreaKeysRef.current);
+
+    if (!isInitializedRef.current || keysChanged) {
+      if (!isInitializedRef.current) {
+        // Absolute first time
+        setCurrentArea(areaKeys[0] || 'big-front');
+        setCanvasStates(initStates);
+        setCanvasHistories(initHistories);
+        setHistoryIndices(initHistoryIdx);
+      } else {
+        // areaKeys changed - try to PRESERVE existing work
+        const nextStates = { ...initStates };
+        const nextHistories = { ...initHistories };
+        const nextIndices = { ...initHistoryIdx };
+
+        // Merge with existing work from refs
+        Object.keys(canvasStatesRef.current).forEach(k => {
+          if (nextStates.hasOwnProperty(k)) {
+            nextStates[k] = canvasStatesRef.current[k];
+            nextHistories[k] = canvasHistories[k] || [];
+            nextIndices[k] = historyIndices[k] ?? -1;
+          }
+        });
+
+        setCanvasStates(nextStates);
+        setCanvasHistories(nextHistories);
+        setHistoryIndices(nextIndices);
+
+        // Don't reset currentArea if it's still valid
+        if (!areaKeys.includes(currentAreaRef.current)) {
+          setCurrentArea(areaKeys[0] || 'big-front');
+        }
+      }
+      isInitializedRef.current = true;
+      prevAreaKeysRef.current = areaKeys;
+    }
+  }, [areaKeys, initStates, initHistories, initHistoryIdx, canvasHistories, historyIndices]);
 
   useEffect(() => {
     const nextColors = incomingColors && incomingColors.length > 0 ? incomingColors : fallbackColors;
@@ -111,29 +156,64 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
     setSelectedColor(prev => nextColors.includes(prev) ? prev : (nextColors[0] || '#FFFFFF'));
   }, [incomingColors]);
 
+  const saveCanvasState = useCallback(() => {
+    if (!canvasRef?.current || isInternalOperationRef.current) return;
+
+    const canvas = canvasRef.current;
+    const canvasState = JSON.stringify(canvas.toJSON());
+    const area = currentAreaRef.current;
+
+    // Update REF immediately so it's available for subsequent calls or switches
+    canvasStatesRef.current[area] = canvasState;
+
+    setCanvasStates(prev => ({
+      ...prev,
+      [area]: canvasState
+    }));
+
+    setCanvasHistories(prev => {
+      const currentHistory = prev[area] || [];
+      const currentIndex = historyIndicesRef.current[area] ?? -1;
+      const newHistory = currentHistory.slice(0, currentIndex + 1);
+      newHistory.push(canvasState);
+      return {
+        ...prev,
+        [area]: newHistory
+      };
+    });
+
+    setHistoryIndices(prev => {
+      const nextIdx = (prev[area] ?? -1) + 1;
+      historyIndicesRef.current[area] = nextIdx;
+      return {
+        ...prev,
+        [area]: nextIdx
+      };
+    });
+  }, []);
+
   React.useImperativeHandle(ref, () => ({
     getDesignData: async () => {
-      // Save current canvas state first
+      const area = currentAreaRef.current;
       if (canvasRef.current) {
         const currentJson = JSON.stringify(canvasRef.current.toJSON());
+        // Use the React state as the base, updated with the current canvas snapshot
         const updatedStates = {
           ...canvasStates,
-          [currentArea]: currentJson
+          [area]: currentJson
         };
-        setCanvasStates(updatedStates);
 
-        const exportOptions = { format: 'png', multiplier: 4 };
-
-        // Export all areas based on saved states
         const images: Record<string, string | null> = {};
         const originalState = currentJson;
 
+        // LOCK to prevent events during export loop
+        isInternalOperationRef.current = true;
+
         const loadState = (canvasObj: any, json: string) =>
           new Promise<void>((resolve, reject) => {
-            // Always reset to avoid leaking previous view drawings
             canvasObj.clear();
-            canvasObj.renderAll();
-            if (!json) {
+            if (!json || json === '') {
+              canvasObj.renderAll();
               return resolve();
             }
             canvasObj.loadFromJSON(json, () => {
@@ -144,21 +224,51 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
 
         for (const key of areaKeys) {
           const state = updatedStates[key];
-          if (!state) {
+          if (!state || state === '') {
             images[key] = null;
             continue;
           }
           try {
+            // During export, we temporarily load each state.
+            const printArea = effectivePrintAreas[key] || { width: 44, height: 60 };
+            if (canvasRef.current.setDimensions) {
+              const CANVAS_MARGIN = 40;
+              const baseWidth = 500;
+              const baseHeight = 600;
+
+              const targetWidth = (printArea.width / 100) * baseWidth + (CANVAS_MARGIN * 2);
+              const targetHeight = (printArea.height / 100) * baseHeight + (CANVAS_MARGIN * 2);
+
+              canvasRef.current.setDimensions({
+                width: isNaN(targetWidth) ? 300 : targetWidth,
+                height: isNaN(targetHeight) ? 400 : targetHeight
+              });
+              canvasRef.current.setViewportTransform([1, 0, 0, 1, CANVAS_MARGIN, CANVAS_MARGIN]);
+            }
+
             await loadState(canvasRef.current, state);
-            images[key] = canvasRef.current.toDataURL(exportOptions);
+            images[key] = canvasRef.current.toDataURL({ format: 'png', multiplier: 4 });
           } catch (e) {
             console.error('Error exporting state', key, e);
             images[key] = null;
           }
         }
 
-        // Restore original state for current area
+        // Restore active view state AND dimensions
+        const activeAreaConfig = effectivePrintAreas[area] || { width: 44, height: 60 };
+        const CANVAS_MARGIN = 40;
+        const baseWidth = 500;
+        const baseHeight = 600;
+
+        canvasRef.current.setDimensions({
+          width: ((activeAreaConfig.width || 44) / 100) * baseWidth + (CANVAS_MARGIN * 2),
+          height: ((activeAreaConfig.height || 60) / 100) * baseHeight + (CANVAS_MARGIN * 2)
+        });
+        canvasRef.current.setViewportTransform([1, 0, 0, 1, CANVAS_MARGIN, CANVAS_MARGIN]);
+
         await loadState(canvasRef.current, originalState);
+
+        isInternalOperationRef.current = false;
 
         return {
           designConfig: {
@@ -170,7 +280,6 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
         };
       }
 
-      // Fallback
       return {
         designConfig: {
           states: canvasStates,
@@ -181,26 +290,19 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
       };
     },
     loadDesignData: (designConfig: any) => {
-      console.log('=== loadDesignData called ===');
-      console.log('designConfig:', designConfig);
-      console.log('designConfig.states:', designConfig?.states);
-      console.log('currentArea:', currentArea);
-
       if (designConfig?.states) {
         setCanvasStates(designConfig.states);
+        // Important: Update Ref too for sync access
+        canvasStatesRef.current = designConfig.states;
 
-        // Load initial state for current area immediately if possible
-        const currentState = designConfig.states[currentArea];
-        console.log('Current area state:', currentState);
-
+        const area = currentAreaRef.current;
+        const currentState = designConfig.states[area];
         if (currentState && canvasRef.current) {
-          console.log('Loading canvas state for', currentArea);
+          isInternalOperationRef.current = true;
           canvasRef.current.loadFromJSON(currentState, () => {
             canvasRef.current.renderAll();
-            console.log('Canvas rendered successfully');
+            isInternalOperationRef.current = false;
           });
-        } else {
-          console.log('No state found for current area or no canvas ref');
         }
       }
       if (designConfig?.color) {
@@ -210,118 +312,109 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
         );
       }
     }
-  }));
+  }), [areaKeys, currentArea, canvasStates, selectedColor, views, effectivePrintAreas]);
 
-  // Undo/Redo functionality
-  const saveCanvasState = useCallback(() => {
-    if (!canvasRef?.current) return;
+  // Effect to load canvas state when currentArea changes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !isInitializedRef.current) return;
 
-    const canvasState = JSON.stringify(canvasRef.current.toJSON());
+    // Use synchronous Ref to get the latest state during transitions
+    const currentState = canvasStatesRef.current[currentArea];
 
-    // Update the current area's state
-    setCanvasStates(prev => ({
-      ...prev,
-      [currentArea]: canvasState
-    }));
+    isInternalOperationRef.current = true;
+    if (currentState && currentState !== '') {
+      canvas.clear();
+      canvas.loadFromJSON(currentState, () => {
+        canvas.renderAll();
+        setTimeout(() => {
+          canvas.renderAll();
+          isInternalOperationRef.current = false;
+        }, 50);
+      });
+    } else {
+      canvas.clear();
+      canvas.renderAll();
+      isInternalOperationRef.current = false;
+    }
+  }, [currentArea]);
 
-    // Update the current area's history
-    setCanvasHistories(prev => {
-      const currentHistory = prev[currentArea] || [];
-      const currentIndex = historyIndices[currentArea];
-      const newHistory = currentHistory.slice(0, currentIndex + 1);
-      newHistory.push(canvasState);
-      return {
-        ...prev,
-        [currentArea]: newHistory
-      };
-    });
-
-    // Update the current area's history index
-    setHistoryIndices(prev => ({
-      ...prev,
-      [currentArea]: prev[currentArea] + 1
-    }));
-  }, [currentArea, historyIndices]);
-
-  // Canvas event handlers
   const handleCanvasReady = useCallback((canvas: any) => {
-    console.log('=== CANVAS READY ===');
-    console.log('Current area:', currentArea);
-    console.log('Canvas states available:', Object.keys(canvasStates));
-
     canvasRef.current = canvas;
 
-    // Add listener for text changes
+    // Use a stable event listener that calls our ref-aware save function
     canvas.on('text:changed', () => {
       saveCanvasState();
     });
 
-    // Load the current area's state if it exists
-    const currentState = canvasStates[currentArea];
-    if (currentState) {
-      console.log('Loading saved state for', currentArea);
+    // Handle generic object modifications
+    canvas.on('object:modified', () => {
+      saveCanvasState();
+    });
+
+    // Initial load - use currentAreaRef to ensure we have the latest if this is called slightly late
+    const area = currentAreaRef.current;
+    const currentState = canvasStatesRef.current[area];
+    if (currentState && currentState !== '') {
       canvas.loadFromJSON(currentState, () => {
         canvas.renderAll();
-        // Force a second render to ensure visibility
-        setTimeout(() => {
-          canvas.renderAll();
-        }, 10);
+        setTimeout(() => canvas.renderAll(), 10);
       });
-    } else {
-      console.log('No saved state, initializing empty canvas for', currentArea);
-      // Save initial empty state for new area
-      const initialState = JSON.stringify(canvas.toJSON());
-      setCanvasStates(prev => ({
-        ...prev,
-        [currentArea]: initialState
-      }));
-      setCanvasHistories(prev => ({
-        ...prev,
-        [currentArea]: [initialState]
-      }));
-      setHistoryIndices(prev => ({
-        ...prev,
-        [currentArea]: 0
-      }));
     }
-    console.log('=== END CANVAS READY ===');
-  }, [currentArea, saveCanvasState]); // REMOVED canvasStates dependency!
+  }, [saveCanvasState]);
 
   const handleSelectionChange = useCallback((element: any) => {
     setSelectedElement(element);
   }, []);
 
-  // Mobile property panel state
-  const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
-
-  // Force re-render of selected element properties
-  const [, forceUpdate] = useState({});
-  const triggerUpdate = useCallback(() => {
-    forceUpdate({});
-  }, []);
-
-  const handleExportArea = (dataURL: string, area: string) => {
-    console.log(`Exporting ${area}:`, dataURL);
-    // Here you could implement actual export functionality
-    // For now, we'll trigger a download
+  const handleExportArea = useCallback((dataURL: string, area: string) => {
     const link = document.createElement('a');
     link.download = `design-${area}-${Date.now()}.png`;
     link.href = dataURL;
     link.click();
-  };
+  }, []);
 
-  const handleExportAll = (designs: any) => {
-    console.log('Exporting all designs:', designs);
-    // Here you could implement bulk export functionality
-    Object.entries(designs).forEach(([area, dataURL]) => {
-      if (dataURL) {
-        const link = document.createElement('a');
-        link.download = `design-${area}-${Date.now()}.png`;
-        link.href = dataURL as string;
-        link.click();
+  const handleExportAll = useCallback(async () => {
+    if (!canvasRef.current || !ref) return;
+
+    // We can use the imperative handle logic or just access current canvas
+    // For simplicity, let's use the local canvasRef
+    if (canvasRef.current) {
+      // Save current first
+      const currentJson = JSON.stringify(canvasRef.current.toJSON());
+      const updatedStates = { ...canvasStates, [currentArea]: currentJson };
+
+      const exportOptions = { format: 'png', multiplier: 4 };
+
+      for (const key of areaKeys) {
+        const state = updatedStates[key];
+        if (state && state !== '') {
+          await new Promise<void>((resolve) => {
+            canvasRef.current.loadFromJSON(state, () => {
+              canvasRef.current.renderAll();
+              const dataURL = canvasRef.current.toDataURL(exportOptions);
+              const link = document.createElement('a');
+              link.download = `design-${key}-${Date.now()}.png`;
+              link.href = dataURL;
+              link.click();
+              resolve();
+            });
+          });
+        }
       }
-    });
-  };
+
+      // Restore
+      canvasRef.current.loadFromJSON(currentJson, () => {
+        canvasRef.current.renderAll();
+      });
+    }
+  }, [currentArea, canvasStates, areaKeys]);
+
+  const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
+  const [, forceUpdate] = useState({});
+  const triggerUpdate = useCallback(() => {
+    forceUpdate({});
+  }, []);
 
   const handleUndo = useCallback(() => {
     const currentIndex = historyIndices[currentArea];
@@ -333,15 +426,12 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
       canvasRef.current.loadFromJSON(canvasState, () => {
         canvasRef.current.renderAll();
       });
-      setHistoryIndices(prev => ({
-        ...prev,
-        [currentArea]: newIndex
-      }));
-      // Update current area's state
-      setCanvasStates(prev => ({
-        ...prev,
-        [currentArea]: canvasState
-      }));
+
+      canvasStatesRef.current[currentArea] = canvasState;
+      historyIndicesRef.current[currentArea] = newIndex;
+
+      setHistoryIndices(prev => ({ ...prev, [currentArea]: newIndex }));
+      setCanvasStates(prev => ({ ...prev, [currentArea]: canvasState }));
     }
   }, [currentArea, historyIndices, canvasHistories]);
 
@@ -355,19 +445,15 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
       canvasRef.current.loadFromJSON(canvasState, () => {
         canvasRef.current.renderAll();
       });
-      setHistoryIndices(prev => ({
-        ...prev,
-        [currentArea]: newIndex
-      }));
-      // Update current area's state
-      setCanvasStates(prev => ({
-        ...prev,
-        [currentArea]: canvasState
-      }));
+
+      canvasStatesRef.current[currentArea] = canvasState;
+      historyIndicesRef.current[currentArea] = newIndex;
+
+      setHistoryIndices(prev => ({ ...prev, [currentArea]: newIndex }));
+      setCanvasStates(prev => ({ ...prev, [currentArea]: canvasState }));
     }
   }, [currentArea, historyIndices, canvasHistories]);
 
-  // Essential toolbar actions
   const handleImageUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !canvasRef?.current) return;
@@ -375,10 +461,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
     const reader = new FileReader();
     reader.onload = (e) => {
       const canvas = canvasRef?.current;
-      if (!canvas) {
-        console.error('Canvas ref is null during image load');
-        return;
-      }
+      if (!canvas) return;
 
       const areaWidth = canvas.getWidth();
       const areaHeight = canvas.getHeight();
@@ -404,10 +487,6 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
         canvas.add(fabricImg);
         canvas.setActiveObject(fabricImg);
         canvas.renderAll();
-
-        setTimeout(() => {
-          canvas.renderAll();
-        }, 10);
         saveCanvasState();
       };
       img.src = e.target?.result as string;
@@ -430,65 +509,41 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
       originX: 'center',
       originY: 'center',
       fontFamily: 'Arial',
-      fontSize: Math.max(16, Math.min(32, areaWidth / 8)),
-      fill: '#FFFFFF',
+      fontSize: Math.max(16, Math.min(32, areaWidth / 10)),
+      fill: '#000000',
       selectable: true,
       editable: true,
-      width: Math.max(80, areaWidth * 0.5),
+      width: Math.max(100, areaWidth * 0.4),
       splitByGrapheme: false
     });
     canvas.add(text);
     canvas.setActiveObject(text);
     canvas.renderAll();
-    setTimeout(() => {
-      canvas.renderAll();
-    }, 10);
     saveCanvasState();
   }, [saveCanvasState]);
 
-  // Area switching
   const handleAreaChange = useCallback((newArea: string) => {
-    // Save current area's state before switching
+    const prevArea = currentAreaRef.current;
+    if (newArea === prevArea) return;
+
     if (canvasRef?.current) {
       const currentState = JSON.stringify(canvasRef.current.toJSON());
+      canvasStatesRef.current[prevArea] = currentState;
       setCanvasStates(prev => ({
         ...prev,
-        [currentArea]: currentState
+        [prevArea]: currentState
       }));
     }
 
-    // Switch to new area
+    currentAreaRef.current = newArea;
     setCurrentArea(newArea);
     setSelectedElement(null);
-
-    // Load new area's state
-    setTimeout(() => {
-      if (canvasRef?.current) {
-        const newAreaState = canvasStates[newArea];
-        if (newAreaState) {
-          canvasRef.current.loadFromJSON(newAreaState, () => {
-            canvasRef.current.renderAll();
-            // Force a second render to ensure visibility
-            setTimeout(() => {
-              canvasRef.current.renderAll();
-            }, 10);
-          });
-        } else {
-          // Clear canvas for new area
-          canvasRef.current.clear();
-          canvasRef.current.renderAll();
-        }
-      }
-    }, 50);
-  }, [currentArea, canvasStates]);
+  }, []);
 
   return (
     <div className="h-full bg-gray-50 dark:bg-gray-900 relative">
-      {/* Main Content */}
       <div className="flex h-full">
-        {/* Left Toolbar - Essential Tools Only */}
         <div className="w-20 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4 space-y-4">
-          {/* Undo/Redo */}
           <div className="flex flex-col items-center space-y-2">
             <span className="text-xs text-gray-600 dark:text-gray-400">History</span>
             <div className="flex flex-col space-y-1">
@@ -515,7 +570,6 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
             </div>
           </div>
 
-          {/* Color Selector */}
           <div className="flex flex-col items-center space-y-2">
             <span className="text-xs text-gray-600 dark:text-gray-400">Color</span>
             <div
@@ -534,7 +588,6 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
             </div>
           </div>
 
-          {/* Add Text */}
           <button
             onClick={handleAddText}
             className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -545,29 +598,22 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
             </svg>
           </button>
 
-          {/* Add Image */}
           <label className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors cursor-pointer" title="Add Image">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 3h16a2 2 0 012 2v14a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9a2 2 0 100-4 2 2 0 000 4z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 15l-3.086-3.086a2 2 0 00-2.828 0L6 21" />
             </svg>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-            />
+            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
           </label>
 
-          {/* Export Actions */}
           <div className="flex flex-col items-center space-y-2 mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
             <span className="text-xs text-gray-600 dark:text-gray-400">Export</span>
             <div className="flex flex-col space-y-1">
               <button
                 onClick={() => {
                   if (canvasRef?.current) {
-                    const dataURL = canvasRef.current.toDataURL({ format: 'png', multiplier: 1 }); // Keep PNG for download
+                    const dataURL = canvasRef.current.toDataURL({ format: 'png', multiplier: 1 });
                     handleExportArea(dataURL, currentArea);
                   }
                 }}
@@ -579,17 +625,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
                 </svg>
               </button>
               <button
-                onClick={() => {
-                  const exportOptions: any = { format: 'jpeg', quality: 0.8 };
-                  const designs = {
-                    'big-front': canvasRef?.current?.toDataURL(exportOptions),
-                    'small-front': null,
-                    back: null,
-                    leftSleeve: null,
-                    rightSleeve: null
-                  };
-                  handleExportAll(designs);
-                }}
+                onClick={handleExportAll}
                 className="p-2 rounded-lg bg-green-100 dark:bg-green-900 hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
                 title="Export All Areas"
               >
@@ -601,9 +637,7 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
           </div>
         </div>
 
-        {/* Center Canvas Area */}
         <div className="flex-1 flex flex-col">
-          {/* Design Area Tabs */}
           <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
             <div className="flex justify-center space-x-1">
               {areaKeys.map((area) => (
@@ -621,7 +655,6 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
             </div>
           </div>
 
-          {/* T-Shirt Mockup - Centered */}
           <div className="flex-1 flex items-center justify-center p-6">
             <TShirtMockup
               currentArea={currentArea}
@@ -636,7 +669,6 @@ const DesignCanvas = React.forwardRef<DesignCanvasRef, DesignCanvasProps>(({ rea
           </div>
         </div>
 
-        {/* Floating Toolbar */}
         <FloatingToolbar
           selectedElement={selectedElement}
           canvasRef={canvasRef}

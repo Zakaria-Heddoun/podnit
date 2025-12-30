@@ -20,6 +20,9 @@ export default function CreateOrderPage() {
   const [orderType, setOrderType] = useState<'product' | 'template'>('product');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [settings, setSettings] = useState<any>(null);
+  const [shippingCityType, setShippingCityType] = useState<'casablanca' | 'other'>('casablanca');
+  const [includePackaging, setIncludePackaging] = useState(true);
 
   const [formData, setFormData] = useState<OrderFormData>({
     customer_id: undefined,
@@ -93,6 +96,31 @@ export default function CreateOrderPage() {
     loadCustomers();
   }, []);
 
+  // Fetch system settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      if (!token) return;
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${API_URL}/api/seller/settings`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            setSettings(result.data);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching settings:', err);
+      }
+    };
+    fetchSettings();
+  }, [token]);
+
   // Fetch product data from API
   useEffect(() => {
     // Wait for auth to be ready
@@ -139,10 +167,35 @@ export default function CreateOrderPage() {
                   return url.startsWith('http') ? url : `${API_URL}${url}`;
                 };
 
+                // Calculate base cost including view-specific prices
+                let baseCost = parseFloat(fullTemplate.product?.base_price) || 0;
+                const states = parsedConfig?.states || {};
+                const productViews = fullTemplate.product?.views || [];
+
+                productViews.forEach((view: any) => {
+                  if (view.key && states[view.key]) {
+                    let hasObjects = false;
+                    try {
+                      if (typeof states[view.key] === 'string') {
+                        const viewState = JSON.parse(states[view.key]);
+                        hasObjects = viewState.objects && viewState.objects.length > 0;
+                      } else {
+                        hasObjects = states[view.key].objects && states[view.key].objects.length > 0;
+                      }
+                    } catch (e) {
+                      console.error(`Error parsing state for view ${view.key}`, e);
+                    }
+
+                    if (hasObjects) {
+                      baseCost += parseFloat(view.price) || 0;
+                    }
+                  }
+                });
+
                 setTemplate({
                   templateId: fullTemplate.id,
                   templateName: fullTemplate.title,
-                  templatePrice: parseFloat(fullTemplate.product?.base_price) || 0,
+                  templatePrice: baseCost,
                   templateCategory: fullTemplate.product?.category || 'Unknown',
                   templateImage: resolveUrl(fullTemplate.thumbnail_image || firstDesignImage),
                 });
@@ -152,7 +205,7 @@ export default function CreateOrderPage() {
                   ...prev,
                   selected_color: fullTemplate.colors?.[0] || 'Black',
                   selected_size: fullTemplate.sizes?.[0] || 'M',
-                  selling_price: fullTemplate.product?.base_price || 0
+                  selling_price: baseCost
                 }));
               }
             } else {
@@ -300,6 +353,14 @@ export default function CreateOrderPage() {
           [field]: value
         }
       }));
+
+      if (field === 'city') {
+        if (value.toLowerCase().trim() === 'casablanca') {
+          setShippingCityType('casablanca');
+        } else {
+          setShippingCityType('other');
+        }
+      }
     } else {
       setFormData(prev => ({
         ...prev,
@@ -376,7 +437,21 @@ export default function CreateOrderPage() {
   };
 
   const calculateTotal = () => {
-    return formData.selling_price * formData.quantity;
+    let total = formData.selling_price * formData.quantity;
+
+    // Add packaging
+    if (includePackaging && settings?.packaging_price) {
+      total += parseFloat(settings.packaging_price.value) * formData.quantity;
+    }
+
+    // Add shipping
+    if (shippingCityType === 'casablanca') {
+      total += parseFloat(settings?.shipping_casablanca?.value || '20');
+    } else {
+      total += parseFloat(settings?.shipping_other?.value || '40');
+    }
+
+    return total;
   };
 
   const calculateProfit = () => {
@@ -413,7 +488,9 @@ export default function CreateOrderPage() {
           selected_color: formData.selected_color,
           selected_size: formData.selected_size,
           shipping_address: formData.shipping_address,
-          notes: formData.notes
+          notes: formData.notes,
+          include_packaging: includePackaging,
+          shipping_city: formData.shipping_address.city
         };
       } else if (orderType === 'product' && product) {
         orderData = {
@@ -426,7 +503,9 @@ export default function CreateOrderPage() {
           selected_size: formData.selected_size,
           selling_price: formData.selling_price,
           shipping_address: formData.shipping_address,
-          notes: formData.notes
+          notes: formData.notes,
+          include_packaging: includePackaging,
+          shipping_city: formData.shipping_address.city
         };
       }
 
@@ -882,22 +961,67 @@ export default function CreateOrderPage() {
                   )}
                 </div>
 
-                <div>
+                <div className="md:col-span-1">
                   <label className="mb-3 block text-sm font-medium text-black dark:text-white">
-                    City *
+                    Shipping City *
                   </label>
-                  <input
-                    type="text"
-                    name="shipping_address.city"
-                    value={formData.shipping_address.city}
-                    onChange={handleInputChange}
-                    className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors['shipping_address.city'] ? 'border-red-500' : 'border-stroke'
-                      }`}
-                    placeholder="Casablanca"
-                  />
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={shippingCityType}
+                      onChange={(e) => {
+                        const type = e.target.value as 'casablanca' | 'other';
+                        setShippingCityType(type);
+                        if (type === 'casablanca') {
+                          setFormData(prev => ({
+                            ...prev,
+                            shipping_address: { ...prev.shipping_address, city: 'Casablanca' }
+                          }));
+                        } else if (formData.shipping_address.city === 'Casablanca') {
+                          setFormData(prev => ({
+                            ...prev,
+                            shipping_address: { ...prev.shipping_address, city: '' }
+                          }));
+                        }
+                      }}
+                      className="w-full rounded border border-stroke px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900"
+                    >
+                      <option value="casablanca">Casablanca</option>
+                      <option value="other">Other City</option>
+                    </select>
+
+                    {shippingCityType === 'other' && (
+                      <input
+                        type="text"
+                        name="shipping_address.city"
+                        value={formData.shipping_address.city === 'Casablanca' ? '' : formData.shipping_address.city}
+                        onChange={handleInputChange}
+                        className={`w-full rounded border px-4 py-3 text-black focus:border-gray-900 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-gray-900 ${errors['shipping_address.city'] ? 'border-red-500' : 'border-stroke'
+                          }`}
+                        placeholder="Enter city name"
+                      />
+                    )}
+                  </div>
                   {errors['shipping_address.city'] && (
                     <p className="mt-1 text-sm text-red-500">{errors['shipping_address.city']}</p>
                   )}
+                </div>
+
+                <div>
+                  <label className="mb-3 block text-sm font-medium text-black dark:text-white">
+                    Packaging *
+                  </label>
+                  <div className="flex items-center gap-2 px-4 py-3 border border-stroke rounded dark:border-strokedark dark:bg-meta-4">
+                    <input
+                      type="checkbox"
+                      id="include_packaging"
+                      checked={includePackaging}
+                      onChange={(e) => setIncludePackaging(e.target.checked)}
+                      className="h-5 w-5 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
+                    />
+                    <label htmlFor="include_packaging" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Include Packaging ({settings?.packaging_price?.value || '5'} DH)
+                    </label>
+                  </div>
                 </div>
 
                 <div>

@@ -16,6 +16,9 @@ interface GeneralSettings {
   deliveryPrice: number;
   minDeposit: number;
   minWithdrawal: number;
+  packagingPrice: number;
+  shippingCasablanca: number;
+  shippingOther: number;
 }
 
 interface PaymentSettings {
@@ -91,7 +94,10 @@ export default function AdminConfiguration() {
     pointsPerOrder: 10,
     deliveryPrice: 0,
     minDeposit: 100,
-    minWithdrawal: 50
+    minWithdrawal: 50,
+    packagingPrice: 5.00,
+    shippingCasablanca: 20.00,
+    shippingOther: 40.00
   });
 
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({
@@ -150,12 +156,79 @@ export default function AdminConfiguration() {
     pushNotifications: false
   });
 
+  const fetchSettings = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/admin/settings`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const s = result.data;
+          setGeneralSettings(prev => ({
+            ...prev,
+            pointsPerOrder: parseInt(s.points_per_order?.value) || 10,
+            referralPointsReferrer: parseInt(s.referral_points_referrer?.value) || 100,
+            minDeposit: parseFloat(s.min_deposit_amount?.value) || 100,
+            minWithdrawal: parseFloat(s.min_withdrawal_amount?.value) || 50,
+            packagingPrice: parseFloat(s.packaging_price?.value) || 5.00,
+            shippingCasablanca: parseFloat(s.shipping_casablanca?.value) || 20.00,
+            shippingOther: parseFloat(s.shipping_other?.value) || 40.00,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching settings:", err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchSettings();
+  }, []);
+
   const handleSave = async () => {
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsLoading(false);
-    alert("Configuration saved successfully!");
+    const token = localStorage.getItem("token");
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/admin/settings/bulk`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          settings: {
+            points_per_order: generalSettings.pointsPerOrder,
+            referral_points_referrer: generalSettings.referralPointsReferrer,
+            min_deposit_amount: generalSettings.minDeposit,
+            min_withdrawal_amount: generalSettings.minWithdrawal,
+            packaging_price: generalSettings.packagingPrice,
+            shipping_casablanca: generalSettings.shippingCasablanca,
+            shipping_other: generalSettings.shippingOther,
+          }
+        }),
+      });
+
+      if (response.ok) {
+        alert("Configuration saved successfully!");
+      } else {
+        alert("Failed to save configuration.");
+      }
+    } catch (err) {
+      console.error("Error saving settings:", err);
+      alert("An error occurred while saving.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const tabs = [
@@ -192,8 +265,8 @@ export default function AdminConfiguration() {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onClick={() => setActiveTab(tab.id as any)}
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${activeTab === tab.id
-                        ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                        : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+                      ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                      : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.05]"
                       }`}
                   >
                     <span className="text-lg">{tab.icon}</span>
@@ -281,6 +354,45 @@ export default function AdminConfiguration() {
                           step="0.01"
                           value={generalSettings.minWithdrawal}
                           onChange={(e) => setGeneralSettings({ ...generalSettings, minWithdrawal: parseFloat(e.target.value) || 0 })}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Packaging Price (DH)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={generalSettings.packagingPrice}
+                          onChange={(e) => setGeneralSettings({ ...generalSettings, packagingPrice: parseFloat(e.target.value) || 0 })}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Shipping Casablanca (DH)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={generalSettings.shippingCasablanca}
+                          onChange={(e) => setGeneralSettings({ ...generalSettings, shippingCasablanca: parseFloat(e.target.value) || 0 })}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Shipping Other Cities (DH)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={generalSettings.shippingOther}
+                          onChange={(e) => setGeneralSettings({ ...generalSettings, shippingOther: parseFloat(e.target.value) || 0 })}
                           className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                         />
                       </div>

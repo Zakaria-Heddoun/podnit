@@ -81,6 +81,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // Orders
     Route::get('/orders', [OrderController::class, 'adminIndex']);
     Route::get('/orders/{order}', [OrderController::class, 'adminShow']);
+    Route::post('/orders/{order}/ship', [OrderController::class, 'shipOrder']);
+    Route::get('/orders/{order}/track', [OrderController::class, 'trackOrder']);
     
     // Products
     Route::get('/users', [AdminDashboardController::class, 'users']);
@@ -118,6 +120,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/employees', [\App\Http\Controllers\AdminEmployeeController::class, 'index']);
     Route::post('/employees', [\App\Http\Controllers\AdminEmployeeController::class, 'store']);
     Route::put('/studio/colors', [StudioSettingsController::class, 'updateColors']);
+    
+    // System Settings
+    Route::get('/settings', [\App\Http\Controllers\SystemSettingsController::class, 'index']);
+    Route::put('/settings/bulk', [\App\Http\Controllers\SystemSettingsController::class, 'updateBulk']);
 });
 
 // Seller routes (requires authentication and seller role)
@@ -164,6 +170,9 @@ Route::middleware(['auth:sanctum', 'seller'])->prefix('seller')->group(function 
     Route::get('/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'show']);
     Route::put('/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'update']);
     Route::delete('/templates/{template}', [\App\Http\Controllers\TemplateController::class, 'destroy']);
+
+    // Settings
+    Route::get('/settings', [\App\Http\Controllers\SystemSettingsController::class, 'index']);
 });
 
 // Admin additional routes

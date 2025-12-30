@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('templates', function (Blueprint $table) {
-            // Drop foreign key for seller_id first
+            // Drop index for seller_id first for SQLite compatibility
+            $table->dropIndex(['seller_id']);
+            
+            // Drop foreign key for seller_id
             $table->dropForeign(['seller_id']);
             
             // Drop columns

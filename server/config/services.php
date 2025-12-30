@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'elitespeed' => [
+        'token' => env('ELITESPEED_API_TOKEN'),
+    ],
+
 ];
