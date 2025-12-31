@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { EcommerceMetrics } from "@/components/ecommerce/EcommerceMetrics";
 import MonthlySalesChart from "@/components/ecommerce/MonthlySalesChart";
 import { BoxIconLine, GroupIcon, DollarLineIcon, TimeIcon } from "@/icons";
 
@@ -168,15 +167,10 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* Hero widgets (keep cool charts, no demographic map) */}
+      {/* Charts and data */}
       <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 xl:col-span-7 space-y-4">
-          <EcommerceMetrics
-            customers={metrics.uniqueCustomers || metrics.totalOrders}
-            orders={metrics.totalOrders}
-            pendingOrders={metrics.pendingOrders}
-          />
-          <MonthlySalesChart />
+        <div className="col-span-12 xl:col-span-7">
+          <MonthlySalesChart userRole="admin" />
         </div>
       </div>
 
@@ -277,16 +271,29 @@ function DataPanel({
   empty?: string;
   icon?: React.ReactNode;
 }) {
+  const getStatusBadge = (status: string | number) => {
+    const statusStr = String(status).toUpperCase();
+    const colors: Record<string, string> = {
+      PENDING: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      APPROVED: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      REJECTED: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+      PRINTED: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+      SHIPPED: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+      DELIVERED: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    };
+    return colors[statusStr] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400";
+  };
+
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900/40">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/40">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
           {icon && (
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
               {icon}
             </div>
           )}
-          <h4 className="text-base font-semibold text-gray-900 dark:text-white">
+          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
             {title}
           </h4>
         </div>
@@ -295,11 +302,11 @@ function DataPanel({
         )}
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full">
           <thead>
-            <tr className="text-left text-gray-500 dark:text-gray-400">
+            <tr className="border-b border-gray-200 dark:border-gray-800">
               {headers.map((h) => (
-                <th key={h} className="pb-2 pr-4">
+                <th key={h} className="pb-3 pr-4 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   {h}
                 </th>
               ))}
@@ -308,16 +315,24 @@ function DataPanel({
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
             {rows.length === 0 && !loading ? (
               <tr>
-                <td className="py-3 text-gray-500 dark:text-gray-400" colSpan={headers.length}>
+                <td className="py-8 text-center text-sm text-gray-500 dark:text-gray-400" colSpan={headers.length}>
                   {empty || "No data"}
                 </td>
               </tr>
             ) : (
               rows.map((row, idx) => (
-                <tr key={idx} className="text-gray-900 dark:text-white">
+                <tr key={idx} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   {row.map((cell, i) => (
-                    <td key={i} className="py-2 pr-4 align-middle">
-                      {cell}
+                    <td key={i} className="py-3 pr-4 align-middle text-sm">
+                      {headers[i] === "Status" ? (
+                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusBadge(cell)}`}>
+                          {cell}
+                        </span>
+                      ) : i === 0 ? (
+                        <span className="font-medium text-gray-900 dark:text-white">{cell}</span>
+                      ) : (
+                        <span className="text-gray-600 dark:text-gray-400">{cell}</span>
+                      )}
                     </td>
                   ))}
                 </tr>

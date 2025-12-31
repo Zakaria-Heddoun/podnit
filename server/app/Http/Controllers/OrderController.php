@@ -506,11 +506,40 @@ class OrderController extends Controller
         // Generate unique order number
         $orderNumber = $this->generateOrderNumber();
 
+        try {
+            Log::info('Attempting to create or find customer...');
+            
+            // Create or find customer
+            $customer = Customer::where('user_id', $user->id)
+                               ->where('email', $request->customer_email)
+                               ->first();
+
+            if ($customer) {
+                Log::info('Existing customer found:', ['customer_id' => $customer->id]);
+                // Update customer info if different
+                $customer->update([
+                    'name' => $request->customer_name,
+                    'phone' => $request->customer_phone,
+                ]);
+            } else {
+                Log::info('Creating new customer...');
+                $customer = Customer::create([
+                    'user_id' => $user->id,
+                    'name' => $request->customer_name,
+                    'email' => $request->customer_email,
+                    'phone' => $request->customer_phone,
+                ]);
+                Log::info('Customer created:', ['customer_id' => $customer->id]);
+            }
+            
+            Log::info('Attempting to create order...');
+
         // Deduct balance and create order in transaction
-        DB::transaction(function () use ($user, $template, $orderNumber, $request, $totalAmount, $unitPrice) {
+        DB::transaction(function () use ($user, $customer, $template, $orderNumber, $request, $totalAmount, $unitPrice) {
             // Create order
             $order = Order::create([
                 'user_id' => $user->id,
+                'customer_id' => $customer->id,
                 'template_id' => $template->id,
                 'product_id' => $template->product_id,
                 'order_number' => $orderNumber,
@@ -561,10 +590,18 @@ class OrderController extends Controller
                     }
                 }
             }
+            
+            // Update customer stats
+            $customer->increment('total_orders');
+            $customer->increment('total_spent', $totalAmount);
+            $customer->last_order_date = now();
+            $customer->save();
+            Log::info('Customer stats updated');
         });
 
         // Get the order after transaction
         $order = Order::where('order_number', $orderNumber)->first();
+        Log::info('Order created successfully:', ['order_id' => $order->id, 'order_number' => $order->order_number]);
 
         // Log status history
         /* $order->statusHistory()->create([
@@ -574,12 +611,22 @@ class OrderController extends Controller
             'updated_by' => $user->id,
         ]); */
 
-        $order->load(['product', 'template']);
-
+        $order->load(['product', 'template', 'customer']);
+        
+        Log::info('=== ORDER CREATION FROM TEMPLATE DEBUG END - SUCCESS ===');
         return response()->json([
             'message' => 'Order created successfully from template',
             'data' => $order
         ], 201);
+        
+        } catch (\Exception $e) {
+            Log::error('Order creation from template failed:', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            
+            return response()->json([
+                'error' => 'Order creation failed',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -637,9 +684,23 @@ class OrderController extends Controller
      */
     private function generateOrderNumber(): string
     {
+        $month = date('m'); // Current month (01-12)
+        $year = date('Y');
+        
+        // Count orders created this month to get sequential number
+        $monthlyCount = Order::whereYear('created_at', $year)
+            ->whereMonth('created_at', $month)
+            ->count();
+        
+        $sequentialNumber = $monthlyCount + 1;
+        
         do {
-            $orderNumber = 'POD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
-        } while (Order::where('order_number', $orderNumber)->exists());
+            $orderNumber = "POD-{$month}-{$sequentialNumber}";
+            $exists = Order::where('order_number', $orderNumber)->exists();
+            if ($exists) {
+                $sequentialNumber++;
+            }
+        } while ($exists);
 
         return $orderNumber;
     }

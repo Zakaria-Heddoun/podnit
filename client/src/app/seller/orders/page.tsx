@@ -98,7 +98,7 @@ export default function SellerOrders() {
         
         // Fetch orders from authenticated seller endpoint
         try {
-          const response = await fetch(`${API_URL}/api/seller/orders`, {
+          const response = await fetch(`${API_URL}/api/seller/orders?per_page=100`, {
             headers: {
               'Accept': 'application/json',
               'Authorization': `Bearer ${token}`
@@ -124,7 +124,11 @@ export default function SellerOrders() {
             
             if (ordersData && ordersData.length >= 0) {
               console.log('Orders data:', ordersData); // Debug log
-              const transformedOrders = ordersData.map(transformApiOrder);
+              // Sort by latest first (in case backend doesn't)
+              const sortedOrders = ordersData.sort((a: OrderApiResponse, b: OrderApiResponse) => 
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              );
+              const transformedOrders = sortedOrders.map(transformApiOrder);
               setOrders(transformedOrders);
               
               // Calculate stats from actual data
@@ -174,7 +178,7 @@ export default function SellerOrders() {
     };
 
     fetchOrders();
-  }, [orderCreated, user]);
+  }, [orderCreated, user, searchParams]);
 
   const handleSelectionChange = (selectedOrders: Order[]) => {
     console.log('Selected orders:', selectedOrders);
@@ -333,7 +337,7 @@ export default function SellerOrders() {
       <OrderDataTable
         data={orders}
         title="Seller Orders Management"
-        enableSelection={true}
+        enableSelection={false}
         onSelectionChange={handleSelectionChange}
         onBulkAction={handleBulkAction}
         onEdit={handleViewDetails}

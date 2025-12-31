@@ -88,7 +88,7 @@ export default function AdminOrders() {
         const token = localStorage.getItem('token');
 
         // Fetch ALL orders from admin endpoint
-        const response = await fetch(`${API_URL}/api/admin/orders`, {
+        const response = await fetch(`${API_URL}/api/admin/orders?per_page=100`, {
           headers: {
             'Accept': 'application/json',
             'Authorization': `Bearer ${token}`
@@ -114,7 +114,11 @@ export default function AdminOrders() {
 
           if (ordersData && ordersData.length >= 0) {
             console.log('Orders data:', ordersData);
-            const transformedOrders = ordersData.map(transformApiOrder);
+            // Sort by latest first (in case backend doesn't)
+            const sortedOrders = ordersData.sort((a: OrderApiResponse, b: OrderApiResponse) => 
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            );
+            const transformedOrders = sortedOrders.map(transformApiOrder);
             setOrders(transformedOrders);
 
             // Calculate stats from actual data
@@ -283,7 +287,7 @@ export default function AdminOrders() {
         data={orders}
         title="Admin Orders Management"
         customerLabel="Seller"
-        enableSelection={true}
+        enableSelection={false}
         onSelectionChange={handleSelectionChange}
         onBulkAction={handleBulkAction}
         onEdit={handleViewDetails}

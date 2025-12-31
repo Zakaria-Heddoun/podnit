@@ -36,7 +36,7 @@ export default function CreateOrderPage() {
     selected_size: '',
     shipping_address: {
       street: '',
-      city: '',
+      city: 'Casablanca',
       postal_code: '',
       country: 'Morocco'
     },
@@ -604,10 +604,10 @@ export default function CreateOrderPage() {
       <div className="grid grid-cols-12 gap-6">
         {/* Product/Template Info */}
         <div className="col-span-12 xl:col-span-4">
-          <div className="h-full rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900/40">
+          <div className="h-full rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/40">
             <div className="mb-4">
               {orderType === 'product' && product?.image_url && (
-                <div className="mb-3 h-32 w-full overflow-hidden rounded">
+                <div className="mb-4 h-32 w-full overflow-hidden rounded-lg">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={product.image_url}
@@ -631,7 +631,7 @@ export default function CreateOrderPage() {
                 </div>
               )}
               {orderType === 'template' && (
-                <div className="mb-3 h-64 w-full overflow-hidden rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <div className="mb-4 h-40 w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                   {template?.templateImage ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
@@ -641,56 +641,87 @@ export default function CreateOrderPage() {
                     />
                   ) : (
                     <div className="h-full w-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center">
-                      <svg className="h-16 w-16 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     </div>
                   )}
                 </div>
               )}
-              <h4 className="text-lg font-semibold text-black dark:text-white">
+              <h4 className="text-lg font-semibold text-black dark:text-white mb-1">
                 {itemName}
               </h4>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Category: {itemCategory}
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {itemCategory}
               </p>
-              <div className="space-y-1 mt-2">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Base cost: <span className="font-medium">{Number(itemPrice || 0).toFixed(2)} DH</span>
-                </p>
-                <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Your price: {formData.selling_price > 0 ? `${Number(formData.selling_price).toFixed(2)} DH` : 'Set price'}
-                </p>
-              </div>
             </div>
 
-            <div className="border-t border-stroke pt-4 dark:border-strokedark">
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Base cost per unit:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">{Number(itemPrice || 0).toFixed(2)} DH</span>
+            {/* Pricing Breakdown */}
+            <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Base cost</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">{Number(itemPrice || 0).toFixed(2)} DH</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Your price</span>
+                <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                  {formData.selling_price > 0 ? `${Number(formData.selling_price).toFixed(2)} DH` : 'Not set'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Profit per unit</span>
+                <span className={`text-sm font-semibold ${calculateProfitPerUnit() >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {calculateProfitPerUnit() >= 0 ? '+' : ''}{calculateProfitPerUnit().toFixed(2)} DH
+                </span>
+              </div>
+              
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Quantity</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">× {formData.quantity}</span>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Your price per unit:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">{formData.selling_price > 0 ? `${Number(formData.selling_price).toFixed(2)} DH` : 'Not set'}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Profit per unit:</span>
-                  <span className={`font-medium ${calculateProfitPerUnit() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {calculateProfitPerUnit() >= 0 ? '+' : ''}{calculateProfitPerUnit().toFixed(2)} DH
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Subtotal</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {(formData.selling_price * formData.quantity).toFixed(2)} DH
                   </span>
                 </div>
+              </div>
+
+              {/* Additional Costs */}
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-800 space-y-2">
+                {includePackaging && settings?.packaging_price && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      Packaging ({formData.quantity}×)
+                    </span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      +{(parseFloat(settings.packaging_price.value) * formData.quantity).toFixed(2)} DH
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Shipping</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    +{(shippingCityType === 'casablanca' 
+                      ? parseFloat(settings?.shipping_casablanca?.value || '20') 
+                      : parseFloat(settings?.shipping_other?.value || '40')
+                    ).toFixed(2)} DH
+                  </span>
+                </div>
+              </div>
+
+              {/* Total */}
+              <div className="pt-3 border-t-2 border-gray-300 dark:border-gray-700">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Quantity:</span>
-                  <span className="font-medium text-black dark:text-white">{formData.quantity}</span>
+                  <span className="text-base font-semibold text-black dark:text-white">Total Revenue</span>
+                  <span className="text-lg font-bold text-gray-900 dark:text-white">
+                    {Number(calculateTotal()).toFixed(2)} DH
+                  </span>
                 </div>
-                <div className="flex justify-between items-center text-lg font-bold border-t pt-2">
-                  <span className="text-black dark:text-white">Total Revenue:</span>
-                  <span className="text-gray-900 dark:text-white">{Number(calculateTotal()).toFixed(2)} DH</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Total Profit:</span>
-                  <span className={`font-medium ${calculateProfit() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Profit</span>
+                  <span className={`text-sm font-semibold ${calculateProfit() >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {calculateProfit() >= 0 ? '+' : ''}{Number(calculateProfit()).toFixed(2)} DH
                   </span>
                 </div>

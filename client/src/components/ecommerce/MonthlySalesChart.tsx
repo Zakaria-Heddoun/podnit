@@ -3,7 +3,7 @@ import { ApexOptions } from "apexcharts";
 import dynamic from "next/dynamic";
 import { MoreDotIcon } from "@/icons";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 
 // Dynamically import the ReactApexChart component
@@ -11,7 +11,61 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
 });
 
-export default function MonthlySalesChart() {
+interface MonthlySalesChartProps {
+  userRole?: 'admin' | 'seller';
+}
+
+export default function MonthlySalesChart({ userRole = 'seller' }: MonthlySalesChartProps) {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const [monthlySales, setMonthlySales] = useState<number[]>(Array(12).fill(0));
+  const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchMonthlySales = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      try {
+        const endpoint = userRole === 'admin' ? '/api/admin/orders' : '/api/seller/orders';
+        const res = await fetch(`${API_URL}${endpoint}?per_page=1000`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
+        
+        if (!res.ok) return;
+        
+        const data = await res.json();
+        const orders = data?.data?.data || data?.data || [];
+        
+        // Calculate monthly sales
+        const salesByMonth = Array(12).fill(0);
+        const currentYear = new Date().getFullYear();
+        
+        orders.forEach((order: any) => {
+          const orderDate = new Date(order.created_at);
+          if (orderDate.getFullYear() === currentYear) {
+            const month = orderDate.getMonth();
+            const revenue = userRole === 'admin' 
+              ? (Number(order.total_amount) || 0)
+              : ((Number(order.selling_price) || 0) * (Number(order.quantity) || 0));
+            salesByMonth[month] += revenue;
+          }
+        });
+        
+        setMonthlySales(salesByMonth);
+      } catch (err) {
+        console.error("Failed to load monthly sales", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMonthlySales();
+  }, [API_URL, userRole]);
+
   const options: ApexOptions = {
     colors: ["#465fff"],
     chart: {
@@ -87,17 +141,17 @@ export default function MonthlySalesChart() {
         show: false,
       },
       y: {
-        formatter: (val: number) => `${val}`,
+        formatter: (val: number) => `${val.toFixed(2)} MAD`,
       },
     },
   };
+  
   const series = [
     {
-      name: "Sales",
-      data: [168, 385, 201, 298, 187, 195, 291, 110, 215, 390, 280, 112],
+      name: userRole === 'admin' ? "Revenue" : "Sales",
+      data: monthlySales,
     },
   ];
-  const [isOpen, setIsOpen] = useState(false);
 
   function toggleDropdown() {
     setIsOpen(!isOpen);
@@ -110,9 +164,14 @@ export default function MonthlySalesChart() {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-5 pt-5 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6 sm:pt-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-          Monthly Sales
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            Monthly Sales {new Date().getFullYear()}
+          </h3>
+          {loading && (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-900 dark:border-gray-600 dark:border-t-white" />
+          )}
+        </div>
 
         <div className="relative inline-block">
           <button onClick={toggleDropdown} className="dropdown-toggle">

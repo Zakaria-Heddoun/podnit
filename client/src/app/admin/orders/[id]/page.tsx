@@ -27,6 +27,7 @@ interface OrderDetail {
     template?: {
         id: number;
         title: string;
+        design_config?: any;
     };
     quantity: number;
     unit_price: number;
@@ -37,6 +38,7 @@ interface OrderDetail {
         color: string;
         size: string;
         notes?: string;
+        design_config?: any;
     };
     shipping_address: {
         street: string;
@@ -62,6 +64,128 @@ export default function AdminOrderDetailPage() {
     const [shippingLoading, setShippingLoading] = useState(false);
 
     const [trackingData, setTrackingData] = useState<any[] | null>(null);
+
+    // Get design images from template/order
+    const designImages = React.useMemo(() => {
+        const images: { key: string; name: string; url: string | null }[] = [];
+        if (!order?.template) return images;
+
+        // Get design_config from customization first (order data), then template
+        const designConfig = order.customization?.design_config || order.template?.design_config;
+        if (!designConfig) return images;
+
+        const config = typeof designConfig === 'string' ? JSON.parse(designConfig) : designConfig;
+        if (!config?.images) return images;
+
+        const viewNames: Record<string, string> = {};
+        (config.views || []).forEach((view: any) => {
+            if (view?.key) {
+                viewNames[view.key] = view.name || view.key;
+            }
+        });
+
+        Object.entries(config.images).forEach(([key, value]) => {
+            if (!value) return;
+            const path = value as string;
+            const imageUrl = path.startsWith('http') 
+                ? path 
+                : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${path}`;
+            images.push({
+                key,
+                name: viewNames[key] || key,
+                url: imageUrl
+            });
+        });
+
+        return images;
+    }, [order]);
+
+    const handleDownloadSingleImage = async (imageKey: string, sideName: string) => {
+        if (!order?.template) return;
+        
+        try {
+            const token = localStorage.getItem('token');
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            
+            const downloadUrl = `${API_URL}/api/admin/templates/${order.template.id}/download/${imageKey}`;
+            
+            const response = await fetch(downloadUrl, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch image');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${order.order_number}-${sideName}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+        } catch (error) {
+            console.error('Download failed:', error);
+            alert('Failed to download image.');
+        }
+    };
+
+    const handleDownloadAllImages = async () => {
+        if (!order?.template || designImages.length === 0) return;
+
+        try {
+            const JSZip = (await import('jszip')).default;
+            const zip = new JSZip();
+            const token = localStorage.getItem('token');
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+            for (const side of designImages) {
+                if (!side.key) continue;
+                
+                try {
+                    const response = await fetch(`${API_URL}/api/admin/templates/${order.template.id}/download/${side.key}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (!response.ok) {
+                        console.error(`Failed to fetch ${side.key}:`, response.status);
+                        continue;
+                    }
+
+                    const blob = await response.blob();
+                    zip.file(`${order.order_number}-${side.name}.png`, blob);
+                    
+                } catch (error) {
+                    console.error(`Failed to add ${side.key} to zip:`, error);
+                }
+            }
+
+            const files = Object.keys(zip.files);
+            if (files.length === 0) {
+                alert('No images could be added to the zip file.');
+                return;
+            }
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const url = window.URL.createObjectURL(content);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${order.order_number}-all-views.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+        } catch (error) {
+            console.error('Zip download failed:', error);
+            alert('Failed to download zip file.');
+        }
+    };
 
     // Fetch tracking info if available
     useEffect(() => {
@@ -228,6 +352,57 @@ export default function AdminOrderDetailPage() {
                 </div>
             </div>
 
+            {/* Template Views - Only show if order is from template */}
+            {order.template && designImages.length > 0 && (
+                <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+                    <div className="mb-4 flex items-center justify-between">
+                        <h3 className="text-lg font-semibold text-black dark:text-white">Template Design Views</h3>
+                        <button
+                            onClick={handleDownloadAllImages}
+                            className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700 transition-colors"
+                        >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Download All as ZIP
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {designImages.map((side) => (
+                            <div
+                                key={side.key}
+                                className="rounded-lg border border-stroke bg-white p-4 dark:border-strokedark dark:bg-boxdark"
+                            >
+                                <div className="mb-3 flex items-center justify-between">
+                                    <h4 className="font-semibold text-black dark:text-white">
+                                        {side.name}
+                                    </h4>
+                                    <button
+                                        onClick={() => handleDownloadSingleImage(side.key, side.name)}
+                                        className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition-colors"
+                                    >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                        Download
+                                    </button>
+                                </div>
+                                <div className="flex items-center justify-center rounded bg-gray-100 p-4 dark:bg-gray-800">
+                                    {side.url && (
+                                        <img
+                                            src={side.url}
+                                            alt={side.name}
+                                            className="max-w-full h-auto rounded"
+                                        />
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Order Information */}
                 <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
@@ -381,48 +556,6 @@ export default function AdminOrderDetailPage() {
                 >
                     Back to Orders
                 </Button>
-                {order.template && (
-                    <Button
-                        variant="outline"
-                        onClick={async () => {
-                            if (!order) return;
-                            try {
-                                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-                                const token = localStorage.getItem('token');
-
-                                const response = await fetch(`${API_URL}/api/admin/orders/${order.id}/download-assets`, {
-                                    headers: {
-                                        'Authorization': `Bearer ${token}`
-                                    }
-                                });
-
-                                if (response.ok) {
-                                    const blob = await response.blob();
-                                    const url = window.URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `order-${order.order_number}-assets.zip`;
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    window.URL.revokeObjectURL(url);
-                                    document.body.removeChild(a);
-                                } else {
-                                    alert('Failed to download assets. Please try again later.');
-                                    console.error('Download failed:', response.statusText);
-                                }
-                            } catch (error) {
-                                console.error('Error downloading assets:', error);
-                                alert('An error occurred while downloading assets.');
-                            }
-                        }}
-                        className="border-green-600 text-green-600 hover:bg-green-50"
-                    >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download Assets
-                    </Button>
-                )}
                 <Button
                     onClick={handleShipOrder}
                     disabled={shippingLoading || order.status === 'PRINTED' || order.status === 'SHIPPED'}

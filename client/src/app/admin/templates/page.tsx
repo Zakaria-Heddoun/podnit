@@ -148,6 +148,30 @@ export default function AdminTemplates() {
     }
   };
 
+  const handleDelete = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this template? This will also delete all associated asset files.')) return;
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/admin/templates/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        setTemplates(prev => prev.filter(t => t.id !== id));
+        alert('Template and all associated files deleted successfully');
+      } else {
+        alert('Failed to delete template');
+      }
+    } catch (error) {
+      console.error("Failed to delete template", error);
+      alert('Failed to delete template');
+    }
+  };
+
   // Filter templates based on search locally
   const filteredTemplates = templates.filter(template =>
     template.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -347,6 +371,17 @@ export default function AdminTemplates() {
                               </button>
                             </>
                           )}
+                          
+                          {/* Delete Button - Always visible for admin */}
+                          <button
+                            onClick={(e) => handleDelete(template.id, e)}
+                            className="rounded-lg bg-gray-50 p-2 text-gray-600 hover:bg-red-50 hover:text-red-600 dark:bg-gray-900/20 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                            title="Delete Template"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </TableCell>
                     </TableRow>

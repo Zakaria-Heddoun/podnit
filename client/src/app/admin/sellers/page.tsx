@@ -125,6 +125,7 @@ export default function AdminSellersPage() {
 
       <SellerDataTable
         data={sellers}
+        enableSelection={false}
         onEdit={handleEditClick}
         onToggleStatus={handleActivate}
         onManagePrices={(seller) => setPriceConfigSeller(seller)}

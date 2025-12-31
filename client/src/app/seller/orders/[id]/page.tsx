@@ -231,24 +231,6 @@ export default function OrderDetailPage() {
             {order.status}
           </Badge>
         </div>
-
-        {/* Quick Actions */}
-        {nextStatuses.length > 0 && (
-          <div className="flex gap-3 mt-4">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Update Status:</span>
-            {nextStatuses.map(status => (
-              <Button
-                key={status}
-                size="sm"
-                onClick={() => handleStatusUpdate(status)}
-                disabled={updating}
-                className="bg-primary hover:bg-primary/90"
-              >
-                {updating ? 'Updating...' : `Mark as ${status.replace('_', ' ')}`}
-              </Button>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -346,9 +328,15 @@ export default function OrderDetailPage() {
           <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Product Customization</h3>
 
           <div className="space-y-3">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-gray-600 dark:text-gray-400">Color:</span>
-              <span className="font-medium text-black dark:text-white">{order.customization.color}</span>
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600"
+                  style={{ backgroundColor: order.customization.color }}
+                />
+                <span className="font-medium text-black dark:text-white">{order.customization.color}</span>
+              </div>
             </div>
 
             <div className="flex justify-between">
@@ -376,44 +364,6 @@ export default function OrderDetailPage() {
             </p>
             <p className="text-black dark:text-white">{order.shipping_address.country}</p>
           </div>
-        </div>
-      </div>
-
-      {/* Status History */}
-      <div className="rounded-sm border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
-        <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Status History</h3>
-
-        <div className="space-y-4">
-          {order.status_history && order.status_history.length > 0 ? (
-            order.status_history.map((history) => (
-              <div key={history.id} className="flex items-start gap-4 pb-4 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-                <div className="flex-shrink-0 w-3 h-3 bg-blue-500 rounded-full mt-1"></div>
-                <div className="flex-grow">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge size="sm" color={getStatusColor(history.new_status)}>
-                      {history.new_status}
-                    </Badge>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {new Date(history.created_at).toLocaleDateString()} at {new Date(history.created_at).toLocaleTimeString()}
-                    </span>
-                  </div>
-                  {history.notes && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{history.notes}</p>
-                  )}
-                  {history.updated_by && (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                      Updated by: {history.updated_by.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center text-gray-500 dark:text-gray-400 py-4">
-              <p>No status history available</p>
-              <p className="text-sm mt-1">Current status: <Badge size="sm" color={getStatusColor(order.status)}>{order.status}</Badge></p>
-            </div>
-          )}
         </div>
       </div>
 
