@@ -71,7 +71,7 @@ export interface DataTableState<T> {
 }
 
 // Action types for data table reducer
-export type DataTableAction<T> = 
+export type DataTableAction<T> =
   | { type: 'SET_SEARCH'; payload: string }
   | { type: 'SET_PAGE'; payload: number }
   | { type: 'SET_PAGE_SIZE'; payload: number }
@@ -124,25 +124,63 @@ export interface Order {
   };
   product: string;
   amount: number;
-  status: "Completed" | "Processing" | "Cancelled" | "Refunded";
+  status: string;
   date: string;
+  trackingNumber?: string;
   paymentMethod?: string;
+}
+
+export interface Customer {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  totalOrders: number;
+  totalSpent: number;
+  lastOrder?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Return {
   id: number;
   returnNumber: string;
+  orderNumber: string;
   customer: {
     name: string;
     email: string;
     avatar?: string;
   };
   product: string;
-  templateName: string;
+  templateName?: string;
+  color?: string;
+  size?: string;
+  quantity?: number;
   amount: number;
-  status: "Approved" | "Pending" | "Rejected" | "Refunded";
+  status: string;
   date: string;
   reason?: string;
+  customization?: any;
+  allow_reshipping?: boolean;
+}
+
+export interface Seller {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  brand_name?: string;
+  cin?: string;
+  bank_name?: string;
+  rib?: string;
+  balance?: number;
+  points?: number;
+  is_verified?: boolean;
+  is_active?: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 // Utility types

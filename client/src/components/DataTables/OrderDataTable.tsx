@@ -3,10 +3,12 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { Order } from '@/types/datatable';
+import { getOrderStatusClasses } from '@/lib/orderStatus';
 
 interface OrderDataTableProps {
   data: Order[];
   title?: string;
+  customerLabel?: string;
   enableSelection?: boolean;
   onSelectionChange?: (selectedItems: Order[]) => void;
   onBulkAction?: (action: string, selectedItems: Order[]) => void;
@@ -15,9 +17,10 @@ interface OrderDataTableProps {
   onDownload?: () => void;
 }
 
-const OrderDataTable: React.FC<OrderDataTableProps> = ({ 
-  data, 
+const OrderDataTable: React.FC<OrderDataTableProps> = ({
+  data,
   title = "Orders Management",
+  customerLabel = "Customer",
   enableSelection = true,
   onSelectionChange,
   onBulkAction,
@@ -26,8 +29,8 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
   onDownload
 }) => {
   const [search, setSearch] = useState("");
-  const [sortColumn, setSortColumn] = useState("orderNumber");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortColumn, setSortColumn] = useState("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
@@ -49,7 +52,13 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
         let modifier = sortDirection === "asc" ? 1 : -1;
         const aValue = a[sortColumn as keyof Order];
         const bValue = b[sortColumn as keyof Order];
-        
+
+        if (sortColumn === "date") {
+          const dateA = new Date(aValue as string).getTime();
+          const dateB = new Date(bValue as string).getTime();
+          return (dateA - dateB) * modifier;
+        }
+
         if (typeof aValue === 'string' && typeof bValue === 'string') {
           return aValue.localeCompare(bValue) * modifier;
         }
@@ -129,7 +138,7 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
       newSelected.delete(id);
     }
     setSelectedItems(newSelected);
-    
+
     if (onSelectionChange) {
       const selectedData = data.filter(item => newSelected.has(item.id));
       onSelectionChange(selectedData);
@@ -138,20 +147,8 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
 
   const isAllSelected = paginatedData.length > 0 && paginatedData.every(item => selectedItems.has(item.id));
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Completed':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-      case 'Processing':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-      case 'Cancelled':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-      case 'Refunded':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
-    }
-  };
+  // Use shared status color utility that handles raw French delivery statuses
+  const getStatusColor = getOrderStatusClasses;
 
   return (
     <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
@@ -162,7 +159,7 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
               {title}
             </h4>
           </div>
-          
+
           <div className="flex gap-3">
             {selectedItems.size > 0 && (
               <>
@@ -238,70 +235,39 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                   />
                 </div>
               )}
-              <div className={`${enableSelection ? 'col-span-1' : 'col-span-1'} flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800`}>
+              <div className={`${enableSelection ? 'col-span-1' : 'col-span-2'} flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800`}>
                 <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("orderNumber")}>
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Order Number</p>
-                  <span className="text-gray-400">
-                    <svg className="fill-current" width="8" height="14" viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4.40962 9.58517C4.21057 9.30081 3.78943 9.30081 3.59038 9.58517L1.05071 13.2133C0.81874 13.5447 1.05582 14 1.46033 14H6.53967C6.94418 14 7.18126 13.5447 6.94929 13.2133L4.40962 9.58517Z" fill=""></path>
-                      <path d="M4.40962 4.41483C4.21057 4.69919 3.78943 4.69919 3.59038 4.41483L1.05071 0.786732C0.81874 0.455343 1.05582 0 1.46033 0H6.53967C6.94418 0 7.18126 0.455342 6.94929 0.786731L4.40962 4.41483Z" fill=""></path>
-                    </svg>
-                  </span>
+                </div>
+              </div>
+              <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+                <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("trackingNumber")}>
+                  <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Ref Number</p>
                 </div>
               </div>
               <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                 <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("customer")}>
-                  <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Customer</p>
-                  <span className="text-gray-400">
-                    <svg className="fill-current" width="8" height="14" viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4.40962 9.58517C4.21057 9.30081 3.78943 9.30081 3.59038 9.58517L1.05071 13.2133C0.81874 13.5447 1.05582 14 1.46033 14H6.53967C6.94418 14 7.18126 13.5447 6.94929 13.2133L4.40962 9.58517Z" fill=""></path>
-                      <path d="M4.40962 4.41483C4.21057 4.69919 3.78943 4.69919 3.59038 4.41483L1.05071 0.786732C0.81874 0.455343 1.05582 0 1.46033 0H6.53967C6.94418 0 7.18126 0.455342 6.94929 0.786731L4.40962 4.41483Z" fill=""></path>
-                    </svg>
-                  </span>
+                  <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">{customerLabel}</p>
                 </div>
               </div>
-              <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+              <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                 <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("product")}>
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Product</p>
-                  <span className="text-gray-400">
-                    <svg className="fill-current" width="8" height="14" viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4.40962 9.58517C4.21057 9.30081 3.78943 9.30081 3.59038 9.58517L1.05071 13.2133C0.81874 13.5447 1.05582 14 1.46033 14H6.53967C6.94418 14 7.18126 13.5447 6.94929 13.2133L4.40962 9.58517Z" fill=""></path>
-                      <path d="M4.40962 4.41483C4.21057 4.69919 3.78943 4.69919 3.59038 4.41483L1.05071 0.786732C0.81874 0.455343 1.05582 0 1.46033 0H6.53967C6.94418 0 7.18126 0.455342 6.94929 0.786731L4.40962 4.41483Z" fill=""></path>
-                    </svg>
-                  </span>
                 </div>
               </div>
               <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                 <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("amount")}>
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Amount</p>
-                  <span className="text-gray-400">
-                    <svg className="fill-current" width="8" height="14" viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4.40962 9.58517C4.21057 9.30081 3.78943 9.30081 3.59038 9.58517L1.05071 13.2133C0.81874 13.5447 1.05582 14 1.46033 14H6.53967C6.94418 14 7.18126 13.5447 6.94929 13.2133L4.40962 9.58517Z" fill=""></path>
-                      <path d="M4.40962 4.41483C4.21057 4.69919 3.78943 4.69919 3.59038 4.41483L1.05071 0.786732C0.81874 0.455343 1.05582 0 1.46033 0H6.53967C6.94418 0 7.18126 0.455342 6.94929 0.786731L4.40962 4.41483Z" fill=""></path>
-                    </svg>
-                  </span>
                 </div>
               </div>
               <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                 <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("status")}>
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Status</p>
-                  <span className="text-gray-400">
-                    <svg className="fill-current" width="8" height="14" viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4.40962 9.58517C4.21057 9.30081 3.78943 9.30081 3.59038 9.58517L1.05071 13.2133C0.81874 13.5447 1.05582 14 1.46033 14H6.53967C6.94418 14 7.18126 13.5447 6.94929 13.2133L4.40962 9.58517Z" fill=""></path>
-                      <path d="M4.40962 4.41483C4.21057 4.69919 3.78943 4.69919 3.59038 4.41483L1.05071 0.786732C0.81874 0.455343 1.05582 0 1.46033 0H6.53967C6.94418 0 7.18126 0.455342 6.94929 0.786731L4.40962 4.41483Z" fill=""></path>
-                    </svg>
-                  </span>
                 </div>
               </div>
-              <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+              <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                 <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("date")}>
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Date</p>
-                  <span className="text-gray-400">
-                    <svg className="fill-current" width="8" height="14" viewBox="0 0 8 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4.40962 9.58517C4.21057 9.30081 3.78943 9.30081 3.59038 9.58517L1.05071 13.2133C0.81874 13.5447 1.05582 14 1.46033 14H6.53967C6.94418 14 7.18126 13.5447 6.94929 13.2133L4.40962 9.58517Z" fill=""></path>
-                      <path d="M4.40962 4.41483C4.21057 4.69919 3.78943 4.69919 3.59038 4.41483L1.05071 0.786732C0.81874 0.455343 1.05582 0 1.46033 0H6.53967C6.94418 0 7.18126 0.455342 6.94929 0.786731L4.40962 4.41483Z" fill=""></path>
-                    </svg>
-                  </span>
                 </div>
               </div>
               <div className="col-span-1 flex items-center px-4 py-3">
@@ -309,7 +275,7 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
               </div>
             </div>
             {/* table header end */}
-            
+
             {/* Desktop table body start */}
             {paginatedData.map((order, index) => (
               <div key={order.id} className="grid grid-cols-12 border-t border-gray-100 dark:border-gray-800">
@@ -323,8 +289,11 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                     />
                   </div>
                 )}
-                <div className={`${enableSelection ? 'col-span-1' : 'col-span-1'} flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800`}>
+                <div className={`${enableSelection ? 'col-span-1' : 'col-span-2'} flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800`}>
                   <p className="text-theme-sm font-medium text-gray-900 dark:text-white">{order.orderNumber}</p>
+                </div>
+                <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+                  <p className="text-theme-sm font-medium text-gray-900 dark:text-white">{order.trackingNumber || 'N/A'}</p>
                 </div>
                 <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                   <div className="flex items-center">
@@ -334,23 +303,18 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                     </div>
                   </div>
                 </div>
-                <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+                <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                   <p className="text-theme-sm text-gray-900 dark:text-white">{order.product}</p>
                 </div>
                 <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
-                  <p className="text-theme-sm font-medium text-gray-900 dark:text-white">${order.amount}</p>
+                  <p className="text-theme-sm font-medium text-gray-900 dark:text-white">{order.amount} DH</p>
                 </div>
                 <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
-                  <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
-                    order.status === 'Completed' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
-                    order.status === 'Processing' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-                    order.status === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
-                    'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
-                  }`}>
+                  <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getStatusColor(order.status)}`}>
                     {order.status}
                   </span>
                 </div>
-                <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+                <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                   <p className="text-theme-sm text-gray-900 dark:text-white">{order.date}</p>
                 </div>
                 <div className="col-span-1 flex items-center px-4 py-3">
@@ -358,19 +322,11 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                     <button
                       onClick={() => onEdit && onEdit(order)}
                       className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                      title="Edit"
+                      title="View Details"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => onDelete && onDelete(order)}
-                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                      title="Delete"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
                     </button>
                   </div>
@@ -421,7 +377,7 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Product:</span>
@@ -429,22 +385,21 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Amount:</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">${order.amount}</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">{order.amount} DH</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Status:</span>
-                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                      order.status === 'Completed' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
-                      order.status === 'Processing' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-                      order.status === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
-                      'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
-                    }`}>
+                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusColor(order.status)}`}>
                       {order.status}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Date:</span>
                     <span className="text-sm text-gray-900 dark:text-white">{order.date}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Ref Number:</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">{order.trackingNumber || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Email:</span>
@@ -474,9 +429,8 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
             {totalPages > 0 && (
               <button
                 onClick={() => goToPage(1)}
-                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${
-                  currentPage === 1 ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
-                }`}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${currentPage === 1 ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
+                  }`}
               >
                 1
               </button>
@@ -490,9 +444,8 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
               <button
                 key={page}
                 onClick={() => goToPage(page)}
-                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${
-                  currentPage === page ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
-                }`}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${currentPage === page ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
+                  }`}
               >
                 {page}
               </button>
@@ -505,9 +458,8 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
             {totalPages > 1 && (
               <button
                 onClick={() => goToPage(totalPages)}
-                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${
-                  currentPage === totalPages ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
-                }`}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${currentPage === totalPages ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
+                  }`}
               >
                 {totalPages}
               </button>

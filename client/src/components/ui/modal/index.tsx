@@ -8,6 +8,8 @@ interface ModalProps {
   children: React.ReactNode;
   showCloseButton?: boolean; // New prop to control close button visibility
   isFullscreen?: boolean; // Default to false for backwards compatibility
+  /** When true, modal is small, centered, and positioned near top */
+  compact?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,6 +19,7 @@ export const Modal: React.FC<ModalProps> = ({
   className,
   showCloseButton = true, // Default to true for backwards compatibility
   isFullscreen = false,
+  compact = false,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -52,13 +55,19 @@ export const Modal: React.FC<ModalProps> = ({
 
   const contentClasses = isFullscreen
     ? "w-full h-full"
-    : "relative w-full rounded-3xl bg-white  dark:bg-gray-900";
+    : compact
+      ? "relative max-w-sm w-full mx-4 rounded-xl bg-white dark:bg-gray-900 shadow-xl"
+      : "relative w-full rounded-3xl bg-white dark:bg-gray-900";
+
+  const containerClasses = compact
+    ? "fixed inset-0 flex items-start justify-center pt-16 overflow-y-auto modal z-99999"
+    : "fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999";
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999">
+    <div className={containerClasses}>
       {!isFullscreen && (
         <div
-          className="fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"
+          className="fixed inset-0 h-full w-full bg-black/30 backdrop-blur-sm"
           onClick={onClose}
         ></div>
       )}
@@ -88,7 +97,7 @@ export const Modal: React.FC<ModalProps> = ({
             </svg>
           </button>
         )}
-        <div>{children}</div>
+        {children}
       </div>
     </div>
   );

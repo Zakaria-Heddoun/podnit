@@ -20,7 +20,7 @@ class AdminUserSeeder extends Seeder
             [
                 'name' => 'Admin User',
                 'email' => 'admin@podnit.com',
-                'password' => Hash::make('admin123'),
+                'password' => Hash::make('@admin@1'),
                 'role' => 'admin',
                 'email_verified_at' => now(),
             ]
@@ -28,6 +28,6 @@ class AdminUserSeeder extends Seeder
 
         $this->command->info('Admin user created successfully!');
         $this->command->info('Email: admin@podnit.com');
-        $this->command->info('Password: admin123');
+        $this->command->info('Password: @admin@1');
     }
 }

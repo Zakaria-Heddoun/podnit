@@ -126,7 +126,7 @@ export default function OrderLifecycle() {
   ];
   
   return (
-    <section className="py-24 bg-background">
+    <section id="order-process" className="py-24 bg-background">
       <div className="container mx-auto px-4">
         <AnimatedGroup preset="hero-blur">
           <div className="text-center mb-8">

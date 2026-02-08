@@ -15,7 +15,7 @@ export default function SellerLayout({
 }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
   const pathname = usePathname();
-  
+
   // Check if we're in the studio
   const isStudioPage = pathname?.includes('/studio');
 
@@ -23,8 +23,8 @@ export default function SellerLayout({
   const mainContentMargin = isMobileOpen
     ? "ml-0"
     : isExpanded || isHovered
-    ? "lg:ml-[290px]"
-    : "lg:ml-[90px]";
+      ? "lg:ml-[290px]"
+      : "lg:ml-[90px]";
 
   return (
     <ProtectedRoute requiredRole="seller">

@@ -7,16 +7,20 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import React, { useState } from "react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+
 export default function SignUpForm() {
   const [showPassword, setShowPassword] = useState(false);
-  const [isChecked, setIsChecked] = useState(false);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     email: '',
     phone: '',
     brand_name: '',
-    password: ''
+    bank_name: '',
+    rib: '',
+    password: '',
+    referred_by_code: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,16 +37,27 @@ export default function SignUpForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
-    if (!isChecked) {
-      setError('Please agree to the Terms and Conditions');
-      setLoading(false);
+    // Client-side validation
+    if (formData.phone.replace(/\D/g, '').length < 10) {
+      setError('Phone number must be at least 10 digits');
       return;
     }
 
+    if (!formData.bank_name) {
+      setError('Please select a bank');
+      return;
+    }
+
+    if (formData.rib.length !== 24) {
+      setError('RIB code must be exactly 24 digits');
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/signup', {
+      const response = await fetch(`${API_URL}/api/signup`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -83,7 +98,7 @@ export default function SignUpForm() {
           className="inline-flex items-center text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
         >
           <ChevronLeftIcon />
-          Back to dashboard
+          Back
         </Link>
       </div>
       <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
@@ -166,6 +181,61 @@ export default function SignUpForm() {
                     required
                   />
                 </div>
+                {/* <!-- Bank Name --> */}
+                <div>
+                  <Label>
+                    Bank Name<span className="text-error-500">*</span>
+                  </Label>
+                  <select
+                    id="bank_name"
+                    name="bank_name"
+                    value={formData.bank_name}
+                    onChange={handleInputChange}
+                    className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                    required
+                  >
+                    <option value="">Select Bank</option>
+                    <option value="CIH">CIH Bank</option>
+                    <option value="ATTIJARI">Attijariwafa Bank</option>
+                    <option value="BMCE">BMCE Bank</option>
+                    <option value="BMCI">BMCI</option>
+                    <option value="CREDIT_AGRICOLE">Crédit Agricole du Maroc</option>
+                    <option value="SOCIETE_GENERALE">Société Générale</option>
+                    <option value="CFG">CFG Bank</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                {/* <!-- RIB Code --> */}
+                <div>
+                  <Label>
+                    RIB Code<span className="text-error-500">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    id="rib"
+                    name="rib"
+                    placeholder="Enter your 24-digit RIB code"
+                    value={formData.rib}
+                    onChange={handleInputChange}
+                    minLength={24}
+                    maxLength={24}
+                    required
+                  />
+                </div>
+                {/* <!-- Referral Code --> */}
+                <div>
+                  <Label>
+                    Referral Code (Optional)
+                  </Label>
+                  <Input
+                    type="text"
+                    id="referred_by_code"
+                    name="referred_by_code"
+                    placeholder="Enter referral code if you have one"
+                    value={formData.referred_by_code}
+                    onChange={handleInputChange}
+                  />
+                </div>
                 {/* <!-- Email --> */}
                 <div>
                   <Label>
@@ -207,27 +277,9 @@ export default function SignUpForm() {
                     </span>
                   </div>
                 </div>
-                {/* <!-- Checkbox --> */}
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    className="w-5 h-5"
-                    checked={isChecked}
-                    onChange={setIsChecked}
-                  />
-                  <p className="inline-block font-normal text-gray-500 dark:text-gray-400">
-                    By creating an account means you agree to the{" "}
-                    <span className="text-gray-800 dark:text-white/90">
-                      Terms and Conditions,
-                    </span>{" "}
-                    and our{" "}
-                    <span className="text-gray-800 dark:text-white">
-                      Privacy Policy
-                    </span>
-                  </p>
-                </div>
                 {/* <!-- Button --> */}
                 <div>
-                  <button 
+                  <button
                     type="submit"
                     disabled={loading}
                     className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium text-white transition rounded-lg bg-gray-800 shadow-theme-xs hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed dark:bg-white dark:text-gray-800 dark:hover:bg-gray-200"

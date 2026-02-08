@@ -3,6 +3,8 @@
 import RadialOrbitalTimeline from "@/components/ui/radial-orbital-timeline";
 import { Shield, Eye, MapPin, DollarSign, Users, Award } from "lucide-react";
 import { AnimatedGroup } from "@/components/ui/animated-group";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 const timelineData = [
   {
     id: 1,
@@ -76,20 +78,52 @@ const timelineData = [
 
 export default function WhyChoose() {
   return (
-    <section className="bg-background">
+    <section id="why-choose" className="bg-background py-12 md:py-0">
       <AnimatedGroup preset="hero-blur">
         <div className="container mx-auto px-4">
-          <div className="text-center">
-            <h2 className="text-3xl lg:text-5xl font-bold text-foreground">
+          <div className="text-center mb-8 md:mb-0">
+            <h2 className="text-3xl lg:text-5xl font-bold text-foreground mb-4">
               Why Choose PODNIT
             </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
               Discover what makes PODNIT the most trusted print-on-demand platform in Morocco
             </p>
           </div>
         </div>
         
-        <div className="h-screen">
+        {/* Mobile Card View */}
+        <div className="md:hidden container mx-auto px-4 mt-8 pb-12">
+          <div className="grid grid-cols-1 gap-6">
+            {timelineData.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Card key={item.id} className="border-2 hover:border-primary transition-all duration-300 hover:shadow-lg">
+                  <CardHeader>
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-6 h-6 text-primary-foreground" />
+                      </div>
+                      <div className="flex-1">
+                        <CardTitle className="text-xl mb-1">{item.title}</CardTitle>
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          {item.date}
+                        </span>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {item.content}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+        
+        {/* Desktop Orbital View */}
+        <div className="hidden md:block h-screen">
           <RadialOrbitalTimeline timelineData={timelineData} />
         </div>
       </AnimatedGroup>

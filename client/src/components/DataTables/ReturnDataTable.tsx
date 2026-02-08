@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { Return } from '@/types/datatable';
+import { getOrderStatusClasses } from '@/lib/orderStatus';
 
 interface ReturnDataTableProps {
   data: Return[];
@@ -11,23 +12,25 @@ interface ReturnDataTableProps {
   onSelectionChange?: (selectedItems: Return[]) => void;
   onBulkAction?: (action: string, selectedItems: Return[]) => void;
   onEdit?: (item: Return) => void;
+  onApprove?: (item: Return) => void;
   onDelete?: (item: Return) => void;
   onDownload?: () => void;
 }
 
-const ReturnDataTable: React.FC<ReturnDataTableProps> = ({ 
-  data, 
+const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
+  data,
   title = "Returns Management",
   enableSelection = true,
   onSelectionChange,
   onBulkAction,
   onEdit,
+  onApprove,
   onDelete,
   onDownload
 }) => {
   const [search, setSearch] = useState("");
-  const [sortColumn, setSortColumn] = useState("returnNumber");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortColumn, setSortColumn] = useState("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
@@ -40,7 +43,7 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
         (returnItem) =>
           returnItem.returnNumber.toLowerCase().includes(searchLower) ||
           returnItem.product.toLowerCase().includes(searchLower) ||
-          returnItem.templateName.toLowerCase().includes(searchLower) ||
+          returnItem.templateName?.toLowerCase().includes(searchLower) ||
           returnItem.status.toLowerCase().includes(searchLower) ||
           returnItem.date.toLowerCase().includes(searchLower)
       )
@@ -48,7 +51,13 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
         let modifier = sortDirection === "asc" ? 1 : -1;
         const aValue = a[sortColumn as keyof Return];
         const bValue = b[sortColumn as keyof Return];
-        
+
+        if (sortColumn === "date") {
+          const dateA = new Date(aValue as string).getTime();
+          const dateB = new Date(bValue as string).getTime();
+          return (dateA - dateB) * modifier;
+        }
+
         if (typeof aValue === 'string' && typeof bValue === 'string') {
           return aValue.localeCompare(bValue) * modifier;
         }
@@ -128,7 +137,7 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
       newSelected.delete(id);
     }
     setSelectedItems(newSelected);
-    
+
     if (onSelectionChange) {
       const selectedData = data.filter(item => newSelected.has(item.id));
       onSelectionChange(selectedData);
@@ -137,20 +146,8 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
 
   const isAllSelected = paginatedData.length > 0 && paginatedData.every(item => selectedItems.has(item.id));
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Approved':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-      case 'Pending':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-      case 'Rejected':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-      case 'Processing':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
-    }
-  };
+  // Use shared status color utility that handles raw French delivery statuses
+  const getStatusColor = getOrderStatusClasses;
 
   return (
     <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
@@ -161,7 +158,7 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
               {title}
             </h4>
           </div>
-          
+
           <div className="flex gap-3">
             {selectedItems.size > 0 && (
               <>
@@ -297,7 +294,7 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
               </div>
             </div>
             {/* table header end */}
-            
+
             {/* Desktop table body start */}
             {paginatedData.map((returnItem, index) => (
               <div key={returnItem.id} className="grid grid-cols-12 border-t border-gray-100 dark:border-gray-800">
@@ -321,28 +318,48 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
                   <p className="text-theme-sm text-gray-900 dark:text-white">{returnItem.templateName}</p>
                 </div>
                 <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
-                  <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
-                    returnItem.status === 'Approved' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
-                    returnItem.status === 'Pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-                    returnItem.status === 'Rejected' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
-                    'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
-                  }`}>
+                  <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getStatusColor(returnItem.status)}`}>
                     {returnItem.status}
                   </span>
                 </div>
                 <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                   <p className="text-theme-sm text-gray-900 dark:text-white">{returnItem.date}</p>
                 </div>
-                <div className="col-span-1 flex items-center px-4 py-3">
-                  <button
-                    onClick={() => onEdit && onEdit(returnItem)}
-                    className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                    title="Reuse"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  </button>
+                <div className="col-span-1 flex items-center gap-2 px-4 py-3">
+                  {/* Admin: Approve/Revoke button */}
+                  {onApprove && (
+                    <button
+                      onClick={() => onApprove(returnItem)}
+                      className={`text-xs px-2 py-1 rounded font-medium transition-colors ${
+                        returnItem.allow_reshipping
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400'
+                      }`}
+                      title={returnItem.allow_reshipping ? 'Approved - Click to revoke' : 'Click to approve reorder'}
+                    >
+                      {returnItem.allow_reshipping ? 'Approved' : 'Approve'}
+                    </button>
+                  )}
+                  {/* Seller: Reorder button */}
+                  {onEdit && (
+                    <div className="relative group">
+                      <button
+                        onClick={() => returnItem.allow_reshipping && onEdit(returnItem)}
+                        disabled={!returnItem.allow_reshipping}
+                        className={`${returnItem.allow_reshipping ? 'text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300' : 'text-gray-400 cursor-not-allowed'}`}
+                        title={returnItem.allow_reshipping ? "Reorder" : "Waiting for Admin Approval"}
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                      {!returnItem.allow_reshipping && (
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                          Waiting for Admin Approval
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -370,18 +387,40 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
                     </div>
                   </div>
                   <div className="flex space-x-2">
-                     <button
-                       onClick={() => onEdit && onEdit(returnItem)}
-                       className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                       title="Reuse"
-                     >
-                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                       </svg>
-                     </button>
-                   </div>
+                    {onApprove && (
+                      <button
+                        onClick={() => onApprove(returnItem)}
+                        className={`text-xs px-2 py-1 rounded font-medium transition-colors ${
+                          returnItem.allow_reshipping
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                        }`}
+                      >
+                        {returnItem.allow_reshipping ? 'Approved' : 'Approve'}
+                      </button>
+                    )}
+                    {onEdit && (
+                      <div className="relative group">
+                        <button
+                          onClick={() => returnItem.allow_reshipping && onEdit(returnItem)}
+                          disabled={!returnItem.allow_reshipping}
+                          className={`${returnItem.allow_reshipping ? 'text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300' : 'text-gray-400 cursor-not-allowed'}`}
+                          title={returnItem.allow_reshipping ? "Reorder" : "Waiting for Admin Approval"}
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                        {!returnItem.allow_reshipping && (
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                            Waiting for Admin Approval
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Product:</span>
@@ -393,13 +432,18 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Status:</span>
-                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                      returnItem.status === 'Approved' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' :
-                      returnItem.status === 'Pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-                      returnItem.status === 'Rejected' ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100' :
-                      'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
-                    }`}>
+                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusColor(returnItem.status)}`}>
                       {returnItem.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Reorder:</span>
+                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                      returnItem.allow_reshipping
+                        ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
+                    }`}>
+                      {returnItem.allow_reshipping ? 'Approved' : 'Pending Approval'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -430,9 +474,8 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
             {totalPages > 0 && (
               <button
                 onClick={() => goToPage(1)}
-                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${
-                  currentPage === 1 ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
-                }`}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${currentPage === 1 ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
+                  }`}
               >
                 1
               </button>
@@ -446,9 +489,8 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
               <button
                 key={page}
                 onClick={() => goToPage(page)}
-                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${
-                  currentPage === page ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
-                }`}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${currentPage === page ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
+                  }`}
               >
                 {page}
               </button>
@@ -461,9 +503,8 @@ const ReturnDataTable: React.FC<ReturnDataTableProps> = ({
             {totalPages > 1 && (
               <button
                 onClick={() => goToPage(totalPages)}
-                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${
-                  currentPage === totalPages ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
-                }`}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium hover:bg-blue-500/[0.08] hover:text-brand-500 ${currentPage === totalPages ? 'bg-blue-500/[0.08] text-brand-500' : 'text-gray-500 dark:text-gray-400'
+                  }`}
               >
                 {totalPages}
               </button>

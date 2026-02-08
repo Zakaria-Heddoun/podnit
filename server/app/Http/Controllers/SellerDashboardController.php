@@ -40,6 +40,11 @@ class SellerDashboardController extends Controller
     {
         $user = auth()->user();
 
+        // Ensure seller has a referral code
+        if ($user->isSeller()) {
+            $user->ensureReferralCode();
+        }
+
         return response()->json([
             'message' => 'Seller profile',
             'data' => $user
@@ -53,15 +58,21 @@ class SellerDashboardController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . auth()->id(),
+            'phone' => 'nullable|string|max:20',
+            'brand_name' => 'nullable|string|max:255',
+            'cin' => 'nullable|string|max:20',
+            'bank_name' => 'nullable|string|max:100',
+            // Email and RIB are not editable
         ]);
 
         $user = auth()->user();
-        $user->update($request->only(['name', 'email']));
+        $user->update($request->only([
+            'name', 'phone', 'brand_name', 'cin', 'bank_name'
+        ]));
 
         return response()->json([
             'message' => 'Profile updated successfully',
-            'data' => $user
+            'data' => $user->fresh()
         ]);
     }
 }

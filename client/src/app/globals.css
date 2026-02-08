@@ -38,18 +38,18 @@
   --color-white: #ffffff;
   --color-black: #000;
 
-  --color-brand-25: #f2f7ff;
-  --color-brand-50: #ecf3ff;
-  --color-brand-100: #dde9ff;
-  --color-brand-200: #c2d6ff;
-  --color-brand-300: #9cb9ff;
-  --color-brand-400: #7592ff;
-  --color-brand-500: #465fff;
-  --color-brand-600: #3641f5;
-  --color-brand-700: #2a31d8;
-  --color-brand-800: #000;
-  --color-brand-900: #000;
-  --color-brand-950: #000;
+  --color-brand-25: #fafafa;
+  --color-brand-50: #f5f5f5;
+  --color-brand-100: #e5e5e5;
+  --color-brand-200: #d4d4d4;
+  --color-brand-300: #a3a3a3;
+  --color-brand-400: #737373;
+  --color-brand-500: #000000;
+  --color-brand-600: #000000;
+  --color-brand-700: #000000;
+  --color-brand-800: #000000;
+  --color-brand-900: #000000;
+  --color-brand-950: #000000;
 
   --color-blue-light-25: #f5fbff;
   --color-blue-light-50: #f0f9ff;
@@ -756,4 +756,14 @@ span.flatpickr-weekday,
 
 .template-button:hover {
   transform: scale(1.05);
+}
+
+/* Sonner Toast Positioning Fix - Ensure toasts appear below header */
+[data-sonner-toaster] {
+  top: 80px !important;
+  z-index: 999999 !important;
+}
+
+[data-sonner-toaster][data-y-position='top'] {
+  top: 80px !important;
 }

@@ -50,11 +50,25 @@ class AdminDashboardController extends Controller
      */
     public function updateUserRole(Request $request, User $user): JsonResponse
     {
+        // Support both legacy role string and new role_id
         $request->validate([
-            'role' => 'required|in:admin,seller'
+            'role' => 'nullable|string',
+            'role_id' => 'nullable|exists:roles,id',
         ]);
 
-        $user->update(['role' => $request->role]);
+        if ($request->filled('role_id')) {
+            $roleModel = \App\Models\Role::find($request->role_id);
+            if ($roleModel) {
+                $user->role_id = $roleModel->id;
+                $user->role = $roleModel->name; // keep legacy string in sync
+            }
+        } elseif ($request->filled('role')) {
+            // simple legacy support for 'admin' and 'seller' strings
+            $user->role = $request->role;
+            $user->role_id = null;
+        }
+
+        $user->save();
 
         return response()->json([
             'message' => 'User role updated successfully',

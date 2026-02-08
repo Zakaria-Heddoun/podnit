@@ -27,7 +27,19 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         ResetPassword::createUrlUsing(function (object $notifiable, string $token) {
-            return config('app.frontend_url')."/password-reset/$token?email={$notifiable->getEmailForPasswordReset()}";
+            return config('app.frontend_url')."/reset-password?token={$token}&email={$notifiable->getEmailForPasswordReset()}";
+        });
+
+        // Handle "MySQL server has gone away" errors by reconnecting
+        \DB::listen(function ($query) {
+            try {
+                // Test connection before executing query
+                \DB::connection()->getPdo();
+            } catch (\Exception $e) {
+                if (str_contains($e->getMessage(), 'MySQL server has gone away')) {
+                    \DB::reconnect();
+                }
+            }
         });
     }
 }

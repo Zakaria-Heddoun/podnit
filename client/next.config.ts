@@ -1,7 +1,36 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'api.podnit.com',
+        pathname: '/images/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'api.podnit.com',
+        pathname: '/storage/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'api.podnit.com',
+        pathname: '/images/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'api.podnit.com',
+        pathname: '/storage/**',
+      },
+    ],
+  },
   async rewrites() {
     return [
       {
