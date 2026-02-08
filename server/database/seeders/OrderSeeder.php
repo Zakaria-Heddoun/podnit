@@ -33,94 +33,41 @@ class OrderSeeder extends Seeder
             return;
         }
         
-        $orders = [
-            [
-                'order_number' => 'POD-20251113-ABC123',
-                'customer_id' => $customers->first()->id,
-                'product_id' => $products->first()->id,
-                'quantity' => 2,
-                'unit_price' => 89.00,
-                'total_amount' => 178.00,
-                'status' => 'PENDING',
+        // Generate 20 random orders for the last 30 days
+        for ($i = 0; $i < 20; $i++) {
+            $customer = $customers->random();
+            $product = $products->random();
+            $quantity = rand(1, 10);
+            $unitPrice = [89.00, 125.00, 100.00, 150.00][rand(0, 3)];
+            $status = ['PENDING', 'IN_PROGRESS', 'SHIPPED', 'DELIVERED'][rand(0, 3)];
+            $createdAt = Carbon::now()->subDays(rand(0, 30))->subHours(rand(0, 23));
+
+            Order::create([
+                'user_id' => 4,
+                'order_number' => 'POD-' . strtoupper(bin2hex(random_bytes(4))),
+                'customer_id' => $customer->id,
+                'product_id' => $product->id,
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'total_amount' => $quantity * $unitPrice,
+                'status' => $status,
                 'customization' => [
-                    'color' => 'Black',
-                    'size' => 'L',
-                    'notes' => 'Please use high-quality print'
+                    'color' => ['Black', 'White', 'Navy', 'Gray'][rand(0, 3)],
+                    'size' => ['S', 'M', 'L', 'XL', 'XXL'][rand(0, 4)],
+                    'notes' => 'Bulk seeded order',
+                    'design_config' => []
                 ],
                 'shipping_address' => [
-                    'street' => '123 Rue Mohammed V',
-                    'city' => 'Casablanca',
-                    'postal_code' => '20000',
+                    'street' => rand(1, 999) . ' random street',
+                    'city' => ['Casablanca', 'Rabat', 'Marrakech', 'Tangier'][rand(0, 3)],
+                    'postal_code' => rand(10000, 99999),
                     'country' => 'Morocco'
                 ],
-                'created_at' => Carbon::now()->subDays(3),
-                'updated_at' => Carbon::now()->subDays(3),
-            ],
-            [
-                'order_number' => 'POD-20251112-DEF456',
-                'customer_id' => $customers->skip(1)->first()->id,
-                'product_id' => $products->count() > 1 ? $products->skip(1)->first()->id : $products->first()->id,
-                'quantity' => 1,
-                'unit_price' => 125.00,
-                'total_amount' => 125.00,
-                'status' => 'IN_PROGRESS',
-                'customization' => [
-                    'color' => 'Navy',
-                    'size' => 'M',
-                    'notes' => 'Standard quality print'
-                ],
-                'shipping_address' => [
-                    'street' => '45 Avenue Hassan II',
-                    'city' => 'Rabat',
-                    'postal_code' => '10000',
-                    'country' => 'Morocco'
-                ],
-                'created_at' => Carbon::now()->subDays(2),
-                'updated_at' => Carbon::now()->subDays(1),
-            ],
-            [
-                'order_number' => 'POD-20251111-GHI789',
-                'customer_id' => $customers->skip(2)->first()->id,
-                'product_id' => $products->first()->id,
-                'quantity' => 3,
-                'unit_price' => 89.00,
-                'total_amount' => 267.00,
-                'status' => 'SHIPPED',
-                'customization' => [
-                    'color' => 'White',
-                    'size' => 'XL',
-                    'notes' => 'Premium quality print'
-                ],
-                'shipping_address' => [
-                    'street' => '78 Boulevard Zerktouni',
-                    'city' => 'Marrakech',
-                    'postal_code' => '40000',
-                    'country' => 'Morocco'
-                ],
-                'created_at' => Carbon::now()->subDays(1),
-                'updated_at' => Carbon::now(),
-            ],
-        ];
-        
-        foreach ($orders as $orderData) {
-            $order = Order::create([
-                'user_id' => 4, // Seller ID
-                'order_number' => $orderData['order_number'],
-                'customer_id' => $orderData['customer_id'],
-                'product_id' => $orderData['product_id'],
-                'quantity' => $orderData['quantity'],
-                'unit_price' => $orderData['unit_price'],
-                'total_amount' => $orderData['total_amount'],
-                'status' => $orderData['status'],
-                'customization' => $orderData['customization'],
-                'shipping_address' => $orderData['shipping_address'],
-                'created_at' => $orderData['created_at'],
-                'updated_at' => $orderData['updated_at'],
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
             ]);
-            
-            // Update customer statistics
-            $customer = Customer::find($orderData['customer_id']);
-            $customer->updateStats($orderData['total_amount']);
+
+            $customer->updateStats($quantity * $unitPrice);
         }
     }
 }

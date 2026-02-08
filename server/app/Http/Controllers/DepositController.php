@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Deposit;
 use App\Models\User;
+use App\Mail\AccountActivatedMail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
@@ -58,8 +60,7 @@ class DepositController extends Controller
             $validator = Validator::make($request->all(), [
                 'amount' => 'required|numeric|min:50|max:50000', // Minimum 50 DH, Maximum 50,000 DH
                 'bank_name' => 'required|in:CIH,ATTIJARI',
-                'receipt_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
-                'reference_number' => 'nullable|string|max:100'
+                'receipt_image' => 'required|mimes:jpeg,png,jpg,pdf|max:5120', // 5MB max, accepts images and PDF
             ]);
 
             if ($validator->fails()) {
@@ -80,7 +81,6 @@ class DepositController extends Controller
                 'amount' => $request->amount,
                 'bank_name' => $request->bank_name,
                 'receipt_image' => $receiptPath,
-                'reference_number' => $request->reference_number,
                 'status' => 'PENDING'
             ]);
 
@@ -139,13 +139,13 @@ class DepositController extends Controller
         $bankDetails = [
             'CIH' => [
                 'bank_name' => 'Crédit Immobilier et Hôtelier (CIH)',
-                'rib' => '007-780-0001234567890-12',
+                'rib' => '230 787 3523462211027000 95',
                 'account_holder' => 'PODNIT SARL',
                 'swift' => 'CIHMMAMC'
             ],
             'ATTIJARI' => [
                 'bank_name' => 'Attijariwafa Bank',
-                'rib' => '007-001-0009876543210-34',
+                'rib' => '007 787 0008795300400440 60',
                 'account_holder' => 'PODNIT SARL',
                 'swift' => 'BCMAMAMC'
             ]
@@ -267,6 +267,8 @@ class DepositController extends Controller
             // If validated, add amount to user's balance
             if ($request->status === 'VALIDATED') {
                 $depositUser = User::find($deposit->user_id);
+                $wasVerified = $depositUser->is_verified;
+                
                 $depositUser->increment('balance', $deposit->amount);
 
                 Log::info('Deposit validated and balance updated', [
@@ -275,6 +277,18 @@ class DepositController extends Controller
                     'amount' => $deposit->amount,
                     'new_balance' => $depositUser->fresh()->balance
                 ]);
+                
+                // Activate account on first deposit validation
+                if (!$wasVerified) {
+                    $depositUser->update(['is_verified' => true]);
+                    
+                    // Send account activation email
+                    try {
+                        Mail::to($depositUser->email)->send(new AccountActivatedMail($depositUser->fresh(), $deposit->amount));
+                    } catch (\Exception $e) {
+                        Log::error('Failed to send account activation email: ' . $e->getMessage());
+                    }
+                }
             }
 
             DB::commit();

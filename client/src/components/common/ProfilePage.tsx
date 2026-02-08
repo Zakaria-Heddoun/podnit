@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 
 interface ProfileFormData {
@@ -9,6 +10,7 @@ interface ProfileFormData {
   phone?: string;
   brand_name?: string;
   cin?: string;
+  account_holder?: string;
   bank_name?: string;
   rib?: string;
   bio?: string;
@@ -23,6 +25,7 @@ export default function ProfilePage() {
     phone: '',
     brand_name: '',
     cin: '',
+    account_holder: '',
     bank_name: '',
     rib: '',
     bio: ''
@@ -45,6 +48,7 @@ export default function ProfilePage() {
         phone: user.phone || '',
         brand_name: user.brand_name || '',
         cin: user.cin || '',
+        account_holder: user.account_holder || '',
         bank_name: user.bank_name || '',
         rib: user.rib || '',
         bio: '' // We can add this to the user model later if needed
@@ -93,7 +97,7 @@ export default function ProfilePage() {
     setLoading(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       const endpoint = user?.role === 'admin' ? '/api/user' : '/api/seller/profile';
 
       const submitData = new FormData();
@@ -124,14 +128,14 @@ export default function ProfilePage() {
         await fetchUserData();
         setProfileImage(null);
         setPreviewImage('');
-        alert('Profile updated successfully!');
+        toast.success('Profile updated successfully!');
       } else {
         const errorData = await response.json();
-        alert(errorData.message || 'Failed to update profile');
+        toast.error(errorData.message || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Failed to update profile');
+      toast.error('Failed to update profile');
     } finally {
       setLoading(false);
     }
@@ -141,14 +145,14 @@ export default function ProfilePage() {
     e.preventDefault();
 
     if (passwordData.password !== passwordData.password_confirmation) {
-      alert('New passwords do not match');
+      toast.error('New passwords do not match');
       return;
     }
 
     setLoading(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
 
       const response = await fetch(`${API_URL}/api/user/password`, {
         method: 'PUT',
@@ -163,14 +167,14 @@ export default function ProfilePage() {
       if (response.ok) {
         setPasswordData({ current_password: '', password: '', password_confirmation: '' });
         setShowPasswordForm(false);
-        alert('Password updated successfully!');
+        toast.success('Password updated successfully!');
       } else {
         const errorData = await response.json();
-        alert(errorData.message || 'Failed to update password');
+        toast.error(errorData.message || 'Failed to update password');
       }
     } catch (error) {
       console.error('Error updating password:', error);
-      alert('Failed to update password');
+      toast.error('Failed to update password');
     } finally {
       setLoading(false);
     }
@@ -229,15 +233,15 @@ export default function ProfilePage() {
                     Email Address
                   </label>
                   <input
-                    className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                    className="w-full rounded border border-stroke bg-gray-2 py-3 px-4.5 text-black dark:border-strokedark dark:bg-meta-4 dark:text-white cursor-not-allowed"
                     type="email"
                     name="email"
                     id="email"
-                    placeholder="Enter your email"
                     value={formData.email}
-                    onChange={handleInputChange}
-                    required
+                    disabled
+                    readOnly
                   />
+                  <p className="mt-1 text-xs text-gray-500">Email cannot be changed. Please contact support if you need to update it.</p>
                 </div>
 
                 <div className="mb-5.5">
@@ -292,23 +296,16 @@ export default function ProfilePage() {
                       <label className="mb-3 block text-sm font-medium text-black dark:text-white" htmlFor="bank_name">
                         Bank Name
                       </label>
-                      <select
-                        className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                      <input
+                        className="w-full rounded border border-stroke bg-gray-2 py-3 px-4.5 text-black dark:border-strokedark dark:bg-meta-4 dark:text-white cursor-not-allowed"
+                        type="text"
                         name="bank_name"
                         id="bank_name"
-                        value={formData.bank_name}
-                        onChange={handleSelectChange}
-                      >
-                        <option value="">Select Bank</option>
-                        <option value="CIH">CIH Bank</option>
-                        <option value="ATTIJARI">Attijariwafa Bank</option>
-                        <option value="BMCE">BMCE Bank</option>
-                        <option value="BMCI">BMCI</option>
-                        <option value="CREDIT_AGRICOLE">Crédit Agricole du Maroc</option>
-                        <option value="SOCIETE_GENERALE">Société Générale</option>
-                        <option value="CFG">CFG Bank</option>
-                        <option value="OTHER">Other</option>
-                      </select>
+                        value={formData.bank_name === 'CIH' ? 'CIH Bank' : formData.bank_name === 'ATTIJARI' ? 'Attijariwafa Bank' : formData.bank_name === 'BMCE' ? 'BMCE Bank' : formData.bank_name === 'BMCI' ? 'BMCI' : formData.bank_name === 'CREDIT_AGRICOLE' ? 'Crédit Agricole du Maroc' : formData.bank_name === 'SOCIETE_GENERALE' ? 'Société Générale' : formData.bank_name === 'CFG' ? 'CFG Bank' : formData.bank_name}
+                        disabled
+                        readOnly
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Bank name cannot be changed for security reasons. Please contact support if needed.</p>
                     </div>
 
                     <div className="mb-5.5">
@@ -316,14 +313,15 @@ export default function ProfilePage() {
                         RIB (Bank Account Number)
                       </label>
                       <input
-                        className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                        className="w-full rounded border border-stroke bg-gray-2 py-3 px-4.5 text-black dark:border-strokedark dark:bg-meta-4 dark:text-white cursor-not-allowed"
                         type="text"
                         name="rib"
                         id="rib"
-                        placeholder="Enter your RIB"
                         value={formData.rib}
-                        onChange={handleInputChange}
+                        disabled
+                        readOnly
                       />
+                      <p className="mt-1 text-xs text-gray-500">RIB cannot be changed for security reasons. Please contact support if needed.</p>
                     </div>
 
                     {/* Display balance and points for sellers */}
@@ -344,6 +342,37 @@ export default function ProfilePage() {
                           {user.points || 0}
                         </div>
                       </div>
+                    </div>
+
+                    {/* Referral Code */}
+                    <div className="mb-5.5">
+                      <label className="mb-3 block text-sm font-medium text-black dark:text-white" htmlFor="referral_code">
+                        Your Referral Code
+                      </label>
+                      <div className="relative">
+                        <input
+                          className="w-full rounded border border-stroke bg-gray-2 py-3 px-4.5 pr-24 text-black dark:border-strokedark dark:bg-meta-4 dark:text-white cursor-not-allowed font-mono font-bold"
+                          type="text"
+                          name="referral_code"
+                          id="referral_code"
+                          value={user.referral_code || 'Generating...'}
+                          disabled
+                          readOnly
+                        />
+                        {user.referral_code && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(user.referral_code);
+                              toast.success('Referral code copied to clipboard!');
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-opacity-90 transition-all"
+                          >
+                            Copy
+                          </button>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">Share this code with others to earn referral rewards.</p>
                     </div>
                   </>
                 )}
@@ -385,197 +414,11 @@ export default function ProfilePage() {
               </form>
             </div>
           </div>
-
-          {/* Security Settings */}
-          <div className="mt-8 rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-            <div className="border-b border-stroke px-7 py-4 dark:border-strokedark">
-              <h3 className="font-medium text-black dark:text-white">
-                Security Settings
-              </h3>
-            </div>
-            <div className="p-7">
-              {!showPasswordForm ? (
-                <button
-                  className="flex justify-center rounded bg-secondary px-6 py-2 font-medium text-white hover:bg-opacity-90"
-                  onClick={() => setShowPasswordForm(true)}
-                >
-                  Change Password
-                </button>
-              ) : (
-                <form onSubmit={handlePasswordSubmit}>
-                  <div className="mb-5.5">
-                    <label className="mb-3 block text-sm font-medium text-black dark:text-white" htmlFor="current_password">
-                      Current Password
-                    </label>
-                    <input
-                      className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
-                      type="password"
-                      name="current_password"
-                      id="current_password"
-                      placeholder="Enter current password"
-                      value={passwordData.current_password}
-                      onChange={handlePasswordChange}
-                      required
-                    />
-                  </div>
-
-                  <div className="mb-5.5">
-                    <label className="mb-3 block text-sm font-medium text-black dark:text-white" htmlFor="password">
-                      New Password
-                    </label>
-                    <input
-                      className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
-                      type="password"
-                      name="password"
-                      id="password"
-                      placeholder="Enter new password"
-                      value={passwordData.password}
-                      onChange={handlePasswordChange}
-                      required
-                    />
-                  </div>
-
-                  <div className="mb-5.5">
-                    <label className="mb-3 block text-sm font-medium text-black dark:text-white" htmlFor="password_confirmation">
-                      Confirm New Password
-                    </label>
-                    <input
-                      className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
-                      type="password"
-                      name="password_confirmation"
-                      id="password_confirmation"
-                      placeholder="Confirm new password"
-                      value={passwordData.password_confirmation}
-                      onChange={handlePasswordChange}
-                      required
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-4.5">
-                    <button
-                      className="flex justify-center rounded border border-stroke px-6 py-2 font-medium text-black hover:shadow-1 dark:border-strokedark dark:text-white"
-                      type="button"
-                      onClick={() => {
-                        setShowPasswordForm(false);
-                        setPasswordData({ current_password: '', password: '', password_confirmation: '' });
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="flex justify-center rounded bg-primary px-6 py-2 font-medium text-gray hover:bg-opacity-90 disabled:opacity-50"
-                      type="submit"
-                      disabled={loading}
-                    >
-                      {loading ? 'Updating...' : 'Update Password'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </div>
         </div>
 
-        {/* Profile Image Section */}
+        {/* Account Info */}
         <div className="col-span-5 xl:col-span-2">
           <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-            <div className="border-b border-stroke px-7 py-4 dark:border-strokedark">
-              <h3 className="font-medium text-black dark:text-white">
-                Profile Photo
-              </h3>
-            </div>
-            <div className="p-7">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="h-14 w-14 rounded-full overflow-hidden">
-                  {previewImage ? (
-                    <img
-                      src={previewImage}
-                      alt="User"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : user.avatar ? (
-                    <img
-                      src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${user.avatar}`}
-                      alt="User"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-primary text-white font-bold text-xl">
-                      {user.name
-                        .split(' ')
-                        .map(n => n[0])
-                        .join('')
-                        .toUpperCase()
-                        .substring(0, 2)}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <span className="mb-1.5 text-black dark:text-white">
-                    Edit your photo
-                  </span>
-                </div>
-              </div>
-
-              <div className="relative mb-5.5 block w-full cursor-pointer appearance-none rounded border border-dashed border-primary bg-gray px-4 py-4 dark:bg-meta-4 sm:py-7.5">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="absolute inset-0 z-50 m-0 h-full w-full cursor-pointer p-0 opacity-0 outline-none"
-                />
-                <div className="flex flex-col items-center justify-center space-y-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke bg-white dark:border-strokedark dark:bg-boxdark">
-                    <svg
-                      width="16"
-                      height="13"
-                      viewBox="0 0 16 13"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M1.99967 9.33337C2.36786 9.33337 2.66634 9.63185 2.66634 10V11.3334C2.66634 11.7016 2.9648 12 3.33301 12H12.6663C13.0345 12 13.333 11.7016 13.333 11.3334V10C13.333 9.63185 13.6315 9.33337 13.9997 9.33337C14.3679 9.33337 14.6663 9.63185 14.6663 10V11.3334C14.6663 12.4379 13.7708 13.3334 12.6663 13.3334H3.33301C2.22844 13.3334 1.33301 12.4379 1.33301 11.3334V10C1.33301 9.63185 1.63148 9.33337 1.99967 9.33337Z"
-                        fill="#3C50E0"
-                      />
-                      <path
-                        d="M7.99967 1.00003C8.36786 1.00003 8.66634 1.29851 8.66634 1.66669V6.66669L10.1663 5.16669C10.4392 4.89384 10.8781 4.89384 11.151 5.16669C11.4238 5.43954 11.4238 5.87846 11.151 6.15131L8.48434 8.81798C8.35014 8.95218 8.17274 9.00003 7.99967 9.00003C7.8266 9.00003 7.6492 8.95218 7.515 8.81798L4.84834 6.15131C4.57549 5.87846 4.57549 5.43954 4.84834 5.16669C5.12119 4.89384 5.56011 4.89384 5.83296 5.16669L7.33301 6.66669V1.66669C7.33301 1.29851 7.63148 1.00003 7.99967 1.00003Z"
-                        fill="#3C50E0"
-                      />
-                    </svg>
-                  </span>
-                  <p>
-                    <span className="text-primary">Click to upload</span> or
-                    drag and drop
-                  </p>
-                  <p className="mt-1.5">SVG, PNG, JPG or GIF</p>
-                  <p>(max, 800 X 800px)</p>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-4.5">
-                <button
-                  className="flex justify-center rounded border border-stroke px-6 py-2 font-medium text-black hover:shadow-1 dark:border-strokedark dark:text-white"
-                  type="button"
-                  onClick={() => {
-                    setProfileImage(null);
-                    setPreviewImage('');
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="flex justify-center rounded bg-primary px-6 py-2 font-medium text-gray hover:bg-opacity-90"
-                  type="button"
-                  onClick={() => handleProfileSubmit()}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Account Info */}
-          <div className="mt-8 rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
             <div className="border-b border-stroke px-7 py-4 dark:border-strokedark">
               <h3 className="font-medium text-black dark:text-white">
                 Account Information

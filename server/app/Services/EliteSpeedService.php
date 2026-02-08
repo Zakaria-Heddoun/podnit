@@ -23,8 +23,6 @@ class EliteSpeedService
      */
     public function createParcel(array $data)
     {
-        Log::info('EliteSpeed: Creating parcel', $data);
-
         // Required headers
         $headers = [
             'Accept' => 'application/json',
@@ -44,7 +42,6 @@ class EliteSpeedService
             ->post("{$this->baseUrl}/client/post/colis/add-colis", $data);
 
         if ($response->successful()) {
-            Log::info('EliteSpeed: Parcel created successfully', $response->json());
             return $response->json();
         }
 
@@ -96,5 +93,27 @@ class EliteSpeedService
         }
         
         throw new \Exception('Failed to fetch pickup list: ' . $response->body());
+    }
+
+    /**
+     * Batch track multiple parcels at once
+     * 
+     * @param array $trackingNumbers Array of tracking codes
+     * @return array Results indexed by tracking number
+     */
+    public function batchTrackParcels(array $trackingNumbers): array
+    {
+        $results = [];
+        
+        foreach ($trackingNumbers as $code) {
+            try {
+                $results[$code] = $this->trackParcel($code);
+            } catch (\Exception $e) {
+                Log::error("Batch tracking failed for {$code}", ['error' => $e->getMessage()]);
+                $results[$code] = null;
+            }
+        }
+        
+        return $results;
     }
 }

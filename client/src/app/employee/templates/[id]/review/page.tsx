@@ -4,7 +4,9 @@ import React, { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { AdminRejectModal } from "@/components/admin/AdminRejectModal";
+import { getImageUrl } from "@/lib/utils";
 
 export default function EmployeeTemplateReviewPage() {
     const router = useRouter();
@@ -17,6 +19,7 @@ export default function EmployeeTemplateReviewPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [rejectModalOpen, setRejectModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
 
     // Check permission
     if (!hasPermission('approve_templates')) {
@@ -43,9 +46,7 @@ export default function EmployeeTemplateReviewPage() {
 
         setIsLoading(true);
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            console.log('🔍 Fetching template:', `${API_URL}/api/admin/templates/${templateId}`);
-            
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
             const response = await fetch(
                 `${API_URL}/api/admin/templates/${templateId}`,
                 {
@@ -56,7 +57,6 @@ export default function EmployeeTemplateReviewPage() {
                 }
             );
 
-            console.log('📡 Template response status:', response.status, response.statusText);
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -65,14 +65,8 @@ export default function EmployeeTemplateReviewPage() {
             }
 
             const data = await response.json();
-            console.log('✅ Template API response:', data);
             
             const templateData = data.data || data.template || data;
-            console.log('📦 Template data:', templateData);
-            console.log('👤 User data:', templateData.user);
-            console.log('🖼️ Images:', {
-                thumbnail: templateData.thumbnail_image,
-            });
             
             setTemplate(templateData);
         } catch (error: any) {
@@ -81,12 +75,6 @@ export default function EmployeeTemplateReviewPage() {
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const getImageUrl = (path: string | null) => {
-        if (!path) return null;
-        if (path.startsWith('http')) return path;
-        return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${path}`;
     };
 
     const designConfig = React.useMemo(() => {
@@ -124,9 +112,12 @@ export default function EmployeeTemplateReviewPage() {
         return images;
     }, [designConfig]);
 
-    const handleApprove = async () => {
-        if (!confirm('Are you sure you want to approve this template?')) return;
+    const handleApproveClick = () => {
+        setApproveConfirmOpen(true);
+    };
 
+    const handleApproveConfirm = async () => {
+        setApproveConfirmOpen(false);
         if (!token) {
             toast({ title: 'Error', description: 'You must be logged in to approve templates' });
             return;
@@ -134,7 +125,7 @@ export default function EmployeeTemplateReviewPage() {
 
         setIsProcessing(true);
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
             const response = await fetch(
                 `${API_URL}/api/admin/templates/${templateId}/approve`,
                 {
@@ -171,7 +162,7 @@ export default function EmployeeTemplateReviewPage() {
 
         setIsProcessing(true);
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
             const response = await fetch(
                 `${API_URL}/api/admin/templates/${templateId}/reject`,
                 {
@@ -205,7 +196,7 @@ export default function EmployeeTemplateReviewPage() {
     const handleDownload = async (imageKey: string, sideName: string) => {
         try {
             const token = localStorage.getItem('token');
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
             
             // Fetch image through authenticated API endpoint
             const response = await fetch(`${API_URL}/api/seller/templates/${templateId}/download/${imageKey}`, {
@@ -240,7 +231,7 @@ export default function EmployeeTemplateReviewPage() {
             const zip = new JSZip();
             const templateName = template?.title || 'template';
             const token = localStorage.getItem('token');
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
 
             // Fetch all images through authenticated API endpoint
             for (const side of designImages) {
@@ -248,9 +239,10 @@ export default function EmployeeTemplateReviewPage() {
                 
                 try {
                 const response = await fetch(`${API_URL}/api/seller/templates/${templateId}/download/${side.key}`, {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
 
                     if (!response.ok) {
                         console.error(`Failed to fetch ${side.key}:`, response.status);
@@ -327,7 +319,7 @@ export default function EmployeeTemplateReviewPage() {
                             {template?.status === 'PENDING' && (
                                 <>
                                     <button
-                                        onClick={handleApprove}
+                                        onClick={handleApproveClick}
                                         className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 transition-colors disabled:opacity-50"
                                         disabled={isProcessing}
                                     >
@@ -418,6 +410,18 @@ export default function EmployeeTemplateReviewPage() {
                 onConfirm={handleRejectConfirm}
                 isProcessing={isProcessing}
             />
+
+            <ConfirmDialog
+                open={approveConfirmOpen}
+                onClose={() => setApproveConfirmOpen(false)}
+                onConfirm={handleApproveConfirm}
+                title="Approve Template"
+                message="Are you sure you want to approve this template?"
+                confirmLabel="Approve"
+                cancelLabel="Cancel"
+                isLoading={isProcessing}
+            />
         </div>
     );
 }
+

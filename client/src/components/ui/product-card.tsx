@@ -54,7 +54,7 @@ function ProductCardImages({
   const handleMouseLeave = () => handleMouse("leave")
 
   return (
-    <div className={cn("relative aspect-video", className)}>
+    <div className={cn("relative aspect-square w-full h-80", className)}>
       {productImages.map((productImage, index) => (
         <motion.div
           key={productImage.id}
@@ -74,13 +74,15 @@ function ProductCardImages({
                 className="pointer-events-none"
                 exit="hidden"
               >
-                <Image
-                  alt={`Product image ${index + 1} in ${productImage.color
-                    } color`}
-                  fill
-                  className="object-contain"
-                  src={productImage.images[0]}
-                />
+                {productImage.images?.[0] && (
+                  <Image
+                    alt={`Product image ${index + 1} in ${productImage.color
+                      } color`}
+                    fill
+                    className="object-contain"
+                    src={productImage.images[0]}
+                  />
+                )}
               </motion.div>
               <motion.div
                 key={1}
@@ -94,14 +96,16 @@ function ProductCardImages({
                 }
                 exit="hidden"
               >
-                <Image
-                  alt={`Product image ${index + 1} in ${productImage.color
-                    } color`}
-                  fill
-                  className="object-contain"
-                  src={productImage.images[1]}
-                  loading="lazy"
-                />
+                {productImage.images?.[1] && (
+                  <Image
+                    alt={`Product image ${index + 1} in ${productImage.color
+                      } color`}
+                    fill
+                    className="object-contain"
+                    src={productImage.images[1]}
+                    loading="lazy"
+                  />
+                )}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -165,6 +169,7 @@ interface ProductCardProps {
   onSimpleProduct?: () => void
   onCustomProduct?: () => void
   inStock?: boolean
+  price?: number
 }
 export function ProductCard({
   id,
@@ -176,6 +181,7 @@ export function ProductCard({
   onSimpleProduct,
   onCustomProduct,
   inStock = true,
+  price,
 }: ProductCardProps) {
   const { activeColor, activeImage, handleColorChange, handleMouse } =
     useSetActiveProduct()
@@ -185,7 +191,7 @@ export function ProductCard({
     <div
       id={id}
       className={cn(
-        "relative px-4 py-6 bg-white rounded-lg border border-gray-200 shadow-sm transition-all",
+        "relative bg-white rounded-lg border border-gray-200 shadow-sm transition-all overflow-hidden",
         inStock ? "hover:shadow-md" : "opacity-75 grayscale bg-gray-50",
         className
       )}
@@ -213,14 +219,22 @@ export function ProductCard({
           productColors={colors}
           activeColor={activeColor}
           setActiveColor={handleColorChange}
+          className="mt-2"
         />
       </div>
 
-      {/* Product Name */}
-      <div className="px-4 mb-3">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+      {/* Product Name and Price */}
+      <div className="px-4 mb-3 mt-2">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
           {name}
         </h3>
+        {price !== undefined && (
+          <div className="text-right">
+            <span className="text-lg font-bold text-green-600 dark:text-green-500">
+              {price.toFixed(2)} DH
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Sizes */}
@@ -263,37 +277,39 @@ export function ProductCard({
       </div>
 
       {/* Action Buttons */}
-      <div className="px-4 flex gap-2 lg:flex-col lg:gap-2">
-        <button
-          onClick={onSimpleProduct}
-          disabled={!inStock}
-          className={cn(
-            "flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2",
-            inStock
-              ? "bg-black text-white hover:bg-gray-800"
-              : "bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-200"
-          )}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Simple
-        </button>
-        <button
-          onClick={onCustomProduct}
-          disabled={!inStock}
-          className={cn(
-            "flex-1 px-4 py-2 text-sm font-medium rounded-md border transition-colors flex items-center justify-center gap-2",
-            inStock
-              ? "bg-white text-black border-gray-300 hover:bg-gray-50"
-              : "bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed"
-          )}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-          </svg>
-          Customize Product
-        </button>
+      <div className="px-4 pb-4 flex flex-col gap-2">
+        <div className="flex gap-2">
+          <button
+            onClick={onSimpleProduct}
+            disabled={!inStock}
+            className={cn(
+              "flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2",
+              inStock
+                ? "bg-black text-white hover:bg-gray-800"
+                : "bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-200"
+            )}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Simple
+          </button>
+          <button
+            onClick={onCustomProduct}
+            disabled={!inStock}
+            className={cn(
+              "flex-1 px-4 py-2 text-sm font-medium rounded-md border transition-colors flex items-center justify-center gap-2",
+              inStock
+                ? "bg-white text-black border-gray-300 hover:bg-gray-50"
+                : "bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed"
+            )}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+            Customize Product
+          </button>
+        </div>
       </div>
     </div>
   )

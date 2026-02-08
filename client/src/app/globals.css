@@ -757,3 +757,13 @@ span.flatpickr-weekday,
 .template-button:hover {
   transform: scale(1.05);
 }
+
+/* Sonner Toast Positioning Fix - Ensure toasts appear below header */
+[data-sonner-toaster] {
+  top: 80px !important;
+  z-index: 999999 !important;
+}
+
+[data-sonner-toaster][data-y-position='top'] {
+  top: 80px !important;
+}

@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Notifications\ResetPassword as ResetPasswordNotification;
 
 class User extends Authenticatable
 {
@@ -27,6 +27,7 @@ class User extends Authenticatable
         'brand_name',
         'phone',
         'cin',
+        'account_holder',
         'bank_name',
         'rib',
         'balance',
@@ -123,5 +124,40 @@ class User extends Authenticatable
         // Fallback: if legacy role string maps to broad permissions
         // (optional) - keep simple: no permission
         return false;
+    }
+
+    /**
+     * Generate a unique referral code for the user
+     */
+    public static function generateUniqueReferralCode(): string
+    {
+        do {
+            // Generate a 6-character alphanumeric referral code
+            $code = strtoupper(\Illuminate\Support\Str::random(6));
+        } while (self::where('referral_code', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * Ensure the user has a referral code (generate if missing)
+     */
+    public function ensureReferralCode(): void
+    {
+        if (empty($this->referral_code) && $this->isSeller()) {
+            $this->referral_code = self::generateUniqueReferralCode();
+            $this->save();
+        }
+    }
+
+    /**
+     * Send the password reset notification.
+     *
+     * @param  string  $token
+     * @return void
+     */
+    public function sendPasswordResetNotification($token)
+    {
+        $this->notify(new ResetPasswordNotification($token));
     }
 }

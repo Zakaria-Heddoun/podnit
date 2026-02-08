@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { extractList } from "@/lib/extractList";
 import {
   Table,
   TableBody,
@@ -13,6 +14,8 @@ import {
 } from "@/components/ui/table";
 import Badge from "@/components/ui/badge/Badge";
 import { AdminRejectModal } from "@/components/admin/AdminRejectModal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { getImageUrl } from "@/lib/utils";
 
 // Template interface
 interface Template {
@@ -44,6 +47,8 @@ export default function EmployeeTemplatesPage() {
   // Rejection Modal State
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [approveId, setApproveId] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const router = useRouter();
@@ -77,13 +82,12 @@ export default function EmployeeTemplatesPage() {
 
     try {
       setIsLoading(true);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       const url = new URL(`${API_URL}/api/admin/templates`);
       if (selectedStatus !== 'All') {
         url.searchParams.append('status', selectedStatus);
       }
 
-      console.log('🔍 Fetching templates from:', url.toString());
 
       const response = await fetch(url.toString(), {
         headers: {
@@ -92,27 +96,10 @@ export default function EmployeeTemplatesPage() {
         }
       });
 
-      console.log('📡 Templates response status:', response.status, response.statusText);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Templates API response:', data);
-        const templatesData = data.data || [];
-        console.log(`✅ Extracted ${templatesData.length} templates`);
-        
-        // Log user data for each template
-        templatesData.forEach((t: any) => {
-          console.log(`Template ${t.id}:`, {
-            title: t.title,
-            user: t.user,
-            user_id: t.user_id,
-            user_name: t.user?.name,
-            images: {
-              thumbnail: t.thumbnail_image,
-            }
-          });
-        });
-        
+        const templatesData = extractList(data);
         setTemplates(templatesData);
       } else {
         const errorText = await response.text();
@@ -134,8 +121,16 @@ export default function EmployeeTemplatesPage() {
     }
   };
 
-  const handleApprove = async (id: number) => {
-    if (!confirm("Are you sure you want to approve this template?")) return;
+  const handleApproveClick = (id: number) => {
+    setApproveId(id);
+    setApproveConfirmOpen(true);
+  };
+
+  const handleApproveConfirm = async () => {
+    const id = approveId;
+    if (!id) return;
+    setApproveConfirmOpen(false);
+    setApproveId(null);
 
     if (!token) {
       toast({ title: 'Error', description: 'You must be logged in to approve templates' });
@@ -143,7 +138,7 @@ export default function EmployeeTemplatesPage() {
     }
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       const response = await fetch(`${API_URL}/api/admin/templates/${id}/approve`, {
         method: 'PUT',
         headers: {
@@ -173,12 +168,6 @@ export default function EmployeeTemplatesPage() {
     setRejectModalOpen(true);
   };
 
-  const getImageUrl = (path: string | null) => {
-    if (!path) return undefined;
-    if (path.startsWith('http')) return path;
-    return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${path}`;
-  };
-
   const parseDesignConfig = (config: any) => {
     if (!config) return null;
     if (typeof config === 'string') {
@@ -206,7 +195,7 @@ export default function EmployeeTemplatesPage() {
     setIsProcessing(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       const response = await fetch(`${API_URL}/api/admin/templates/${selectedTemplateId}/reject`, {
         method: 'PUT',
         headers: {
@@ -237,19 +226,19 @@ export default function EmployeeTemplatesPage() {
   };
 
   // Filter templates based on search locally
-  const filteredTemplates = templates.filter(template =>
+  const filteredTemplates = Array.isArray(templates) ? templates.filter(template =>
     template.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (template.user?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ) : [];
 
   const statuses = ["All", "Pending", "Approved", "Rejected"];
 
   // Template statistics
   const stats = {
-    total: templates.length,
-    approved: templates.filter(t => t.status === "APPROVED").length,
-    pending: templates.filter(t => t.status === "PENDING").length,
-    rejected: templates.filter(t => t.status === "REJECTED").length,
+    total: Array.isArray(templates) ? templates.length : 0,
+    approved: Array.isArray(templates) ? templates.filter(t => t.status === "APPROVED").length : 0,
+    pending: Array.isArray(templates) ? templates.filter(t => t.status === "PENDING").length : 0,
+    rejected: Array.isArray(templates) ? templates.filter(t => t.status === "REJECTED").length : 0,
   };
 
   return (
@@ -419,7 +408,7 @@ export default function EmployeeTemplatesPage() {
                           {template.status === 'PENDING' && (
                             <>
                               <button
-                                onClick={() => handleApprove(template.id)}
+                                onClick={() => handleApproveClick(template.id)}
                                 className="rounded-lg bg-green-50 p-2 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30"
                                 title="Approve"
                               >
@@ -454,6 +443,17 @@ export default function EmployeeTemplatesPage() {
         onClose={() => setRejectModalOpen(false)}
         onConfirm={handleRejectConfirm}
         isProcessing={isProcessing}
+      />
+
+      <ConfirmDialog
+        open={approveConfirmOpen}
+        onClose={() => { setApproveConfirmOpen(false); setApproveId(null); }}
+        onConfirm={handleApproveConfirm}
+        title="Approve Template"
+        message="Are you sure you want to approve this template?"
+        confirmLabel="Approve"
+        cancelLabel="Cancel"
+        isLoading={isProcessing}
       />
     </div>
   );

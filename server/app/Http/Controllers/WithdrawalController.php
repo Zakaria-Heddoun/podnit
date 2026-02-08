@@ -54,13 +54,17 @@ class WithdrawalController extends Controller
                 return response()->json(['error' => 'Unauthorized'], 401);
             }
 
+            // Validate that user has complete bank details
+            if (!$user->bank_name || !$user->account_holder || !$user->rib) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your bank details are incomplete. Please contact support to update your profile.'
+                ], 400);
+            }
+
             $validator = Validator::make($request->all(), [
                 'amount' => 'required|numeric|min:100|max:20000', // Minimum 100 DH, Maximum 20,000 DH
-                'bank_details' => 'required|array',
-                'bank_details.bank_name' => 'required|string|max:100',
-                'bank_details.account_holder' => 'required|string|max:100',
-                'bank_details.rib' => 'required|string|min:24|max:28', // Moroccan RIB format
-                'bank_details.swift' => 'nullable|string|max:11'
+                'is_instant_transfer' => 'nullable|boolean',
             ]);
 
             if ($validator->fails()) {
@@ -93,17 +97,31 @@ class WithdrawalController extends Controller
 
             DB::beginTransaction();
 
-            // Calculate fees (2% of amount, minimum 10 DH, maximum 200 DH)
-            $feePercentage = 0.02; // 2%
-            $fee = max(10, min(200, $request->amount * $feePercentage));
+            // Calculate fees: 20 DH for instant transfers to non-CIH/ATTIJARI banks, otherwise 0
+            $isInstant = filter_var($request->is_instant_transfer ?? false, FILTER_VALIDATE_BOOLEAN);
+            $bankName = $user->bank_name;
+            $fee = 0;
+            
+            if ($isInstant && !in_array($bankName, ['CIH', 'ATTIJARI'])) {
+                $fee = 20;
+            }
+            
             $netAmount = $request->amount - $fee;
+
+            // Use bank details from user's profile
+            $bankDetails = [
+                'account_holder' => $user->account_holder,
+                'rib' => $user->rib,
+            ];
 
             $withdrawal = Withdrawal::create([
                 'user_id' => $user->id,
                 'amount' => $request->amount,
                 'fee' => $fee,
                 'net_amount' => $netAmount,
-                'bank_details' => $request->bank_details,
+                'bank_name' => $bankName,
+                'is_instant' => $isInstant,
+                'bank_details' => $bankDetails,
                 'status' => 'PENDING'
             ]);
 

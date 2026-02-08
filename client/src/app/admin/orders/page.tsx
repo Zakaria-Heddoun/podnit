@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import PermissionGuard from "@/components/auth/PermissionGuard";
 import OrderDataTable from "@/components/DataTables/OrderDataTable";
+import { toast } from "sonner";
 import { Order } from "@/types/datatable";
 
-// Order status type
-type OrderStatus = 'PENDING' | 'IN_PROGRESS' | 'PRINTED' | 'DELIVERING' | 'SHIPPED' | 'PAID' | 'CANCELLED' | 'RETURNED';
+// Order status is a free-form string (raw delivery API statuses)
 
 interface OrderApiResponse {
   id: number;
@@ -46,11 +48,13 @@ interface OrderApiResponse {
     postal_code: string;
     country: string;
   };
+  tracking_number?: string;
   created_at: string;
   updated_at: string;
 }
 
 export default function AdminOrders() {
+  const { hasPermission } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -59,6 +63,17 @@ export default function AdminOrders() {
     completed: 0,
     revenue: 0
   });
+
+  const accessDeniedFallback = (
+    <div className="p-6">
+      <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-sm text-center">
+        <h1 className="text-2xl font-semibold mb-2 text-gray-900 dark:text-white">Access Denied</h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          You don't have permission to view orders. Contact your administrator.
+        </p>
+      </div>
+    </div>
+  );
 
   // Transform API response to match UI component format
   const transformApiOrder = (apiOrder: OrderApiResponse): Order => {
@@ -72,8 +87,9 @@ export default function AdminOrders() {
       },
       product: apiOrder.product?.name || 'Unknown Product',
       amount: apiOrder.total_amount,
-      status: apiOrder.status as 'Completed' | 'Processing' | 'Cancelled' | 'Refunded',
+      status: apiOrder.status as any,
       date: new Date(apiOrder.created_at).toLocaleDateString(),
+      trackingNumber: apiOrder.tracking_number,
       paymentMethod: undefined
     };
   };
@@ -84,7 +100,7 @@ export default function AdminOrders() {
       setLoading(true);
 
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
         const token = localStorage.getItem('token');
 
         // Fetch ALL orders from admin endpoint
@@ -97,7 +113,6 @@ export default function AdminOrders() {
 
         if (response.ok) {
           const result = await response.json();
-          console.log('API Response:', result);
 
           // Handle different response structures
           let ordersData;
@@ -113,9 +128,8 @@ export default function AdminOrders() {
           }
 
           if (ordersData && ordersData.length >= 0) {
-            console.log('Orders data:', ordersData);
             // Sort by latest first (in case backend doesn't)
-            const sortedOrders = ordersData.sort((a: OrderApiResponse, b: OrderApiResponse) => 
+            const sortedOrders = ordersData.sort((a: OrderApiResponse, b: OrderApiResponse) =>
               new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
             );
             const transformedOrders = sortedOrders.map(transformApiOrder);
@@ -125,9 +139,9 @@ export default function AdminOrders() {
             const statsData = {
               total: ordersData.length,
               pending: ordersData.filter((o: OrderApiResponse) => o.status === 'PENDING').length,
-              completed: ordersData.filter((o: OrderApiResponse) => o.status === 'PAID').length,
+              completed: ordersData.filter((o: OrderApiResponse) => o.status.toLowerCase().includes('livré')).length,
               revenue: ordersData
-                .filter((o: OrderApiResponse) => o.status === 'PAID')
+                .filter((o: OrderApiResponse) => o.status.toLowerCase().includes('livré'))
                 .reduce((sum: number, o: OrderApiResponse) => sum + o.total_amount, 0)
             };
             setStats(statsData);
@@ -162,34 +176,29 @@ export default function AdminOrders() {
   }, []);
 
   const handleSelectionChange = (selectedOrders: Order[]) => {
-    console.log('Selected orders:', selectedOrders);
   };
 
   const handleBulkAction = (action: string, selectedOrders: Order[]) => {
-    console.log(`Bulk action: ${action}`, selectedOrders);
     switch (action) {
       case 'updateStatus':
         if (selectedOrders.length > 0) {
-          alert(`Updating status for ${selectedOrders.length} orders`);
+          toast.info(`Updating status for ${selectedOrders.length} orders`);
         }
         break;
       case 'export':
-        alert(`Exporting ${selectedOrders.length} selected orders`);
+        toast.info(`Exporting ${selectedOrders.length} selected orders`);
         break;
       default:
-        console.log('Unknown bulk action:', action);
+        break;
     }
   };
 
   const handleViewDetails = (order: Order) => {
-    console.log('View order details:', order);
-    // Navigate to order details page
     window.location.href = `/admin/orders/${order.id}`;
   };
 
   const handleDownload = () => {
-    console.log('Download all orders');
-    alert('Downloading all orders as CSV...');
+    toast.info('Downloading all orders as CSV...');
   };
 
   if (loading) {
@@ -201,6 +210,10 @@ export default function AdminOrders() {
   }
 
   return (
+    <PermissionGuard 
+      requiredPermissions={['view_orders', 'manage_orders']}
+      fallback={accessDeniedFallback}
+    >
     <div className="mx-auto max-w-screen-2xl space-y-6">
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -294,5 +307,6 @@ export default function AdminOrders() {
         onDownload={handleDownload}
       />
     </div>
+    </PermissionGuard>
   );
 }

@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Badge from "@/components/ui/badge/Badge";
+import { getImageUrl, getApiUrl } from "@/lib/utils";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 // Template interface matching API
 interface Template {
@@ -10,11 +13,18 @@ interface Template {
   title: string;
   description: string;
   thumbnail_image: string | null;
+  calculated_price?: number;
   status: "PENDING" | "APPROVED" | "REJECTED";
   admin_feedback?: string;
   created_at: string;
   orders_count?: number; // Assuming backend appends this or we calculate
   product_id: number;
+  product?: {
+    id: number;
+    name: string;
+    base_price: string;
+    product_images?: Array<{ image_url: string }>;
+  };
 }
 
 export default function SellerTemplates() {
@@ -23,27 +33,86 @@ export default function SellerTemplates() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  const getImageUrl = (path: string | null) => {
-    if (!path) return undefined;
-    if (path.startsWith('http')) return path;
-    return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${path}`;
-  };
+  const searchParams = useSearchParams();
 
   useEffect(() => {
+    // Always fetch templates on mount
     fetchTemplates();
-  }, []);
+
+    // If there is a newly created template stored in sessionStorage (fallback from studio), prepend it immediately
+    try {
+      const stored = sessionStorage.getItem('new_template');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setTemplates(prev => prev.some(t => t.id === parsed.id) ? prev : [parsed, ...prev]);
+        sessionStorage.removeItem('new_template');
+        // Remove query params if present
+        try { router.replace('/seller/templates'); } catch (e) { /* ignore */ }
+      }
+    } catch (err) {
+      console.warn('Failed to load new_template from sessionStorage', err);
+    }
+
+    // If we were redirected after creating a template, fetch that single template and prepend it
+    const isNew = searchParams?.get?.('new') === '1';
+    const templateId = searchParams?.get?.('templateId');
+
+    if (isNew && templateId) {
+      (async () => {
+        try {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/seller/templates/${templateId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          });
+          if (response.ok) {
+            const json = await response.json();
+            const newTemplate = json.data;
+            // Avoid duplicates
+            setTemplates(prev => prev.some(t => t.id === newTemplate.id) ? prev : [newTemplate, ...prev]);
+          }
+        } catch (err) {
+          console.error('Failed to fetch created template', err);
+        } finally {
+          // Clean up the query params in the URL so we don't refetch repeatedly
+          try { router.replace('/seller/templates'); } catch (e) { /* ignore */ }
+        }
+      })();
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const fetchTemplates = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/seller/templates`, {
+      const response = await fetch(`${getApiUrl()}/api/seller/templates`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       if (response.ok) {
         const data = await response.json();
-        setTemplates(data.data || []);
+        // Support paginator or legacy array
+        let templatesData = Array.isArray(data.data) ? data.data : (data.data?.data || []);
+
+        // If a newly created template was saved to sessionStorage as a fallback, merge it in
+        try {
+          const stored = sessionStorage.getItem('new_template');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (!templatesData.some((t: any) => t.id === parsed.id)) {
+              templatesData = [parsed, ...templatesData];
+            }
+            sessionStorage.removeItem('new_template');
+            try { router.replace('/seller/templates'); } catch (e) { /* ignore */ }
+          }
+        } catch (err) {
+          console.warn('Failed to merge new_template into templates list', err);
+        }
+
+        setTemplates(templatesData);
       }
     } catch (error) {
       console.error("Failed to fetch templates", error);
@@ -52,9 +121,17 @@ export default function SellerTemplates() {
     }
   };
 
-  const handleDelete = async (id: number, e: React.MouseEvent) => {
+  const handleDeleteClick = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this template?')) return;
+    setDeleteId(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteId) return;
+    const id = deleteId;
+    setDeleteConfirmOpen(false);
+    setDeleteId(null);
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/seller/templates/${id}`, {
@@ -66,9 +143,13 @@ export default function SellerTemplates() {
 
       if (response.ok) {
         setTemplates(prev => prev.filter(t => t.id !== id));
+        toast.success('Template deleted successfully');
+      } else {
+        toast.error('Failed to delete template');
       }
     } catch (error) {
       console.error("Failed to delete template", error);
+      toast.error('Failed to delete template');
     }
   };
 
@@ -88,20 +169,19 @@ export default function SellerTemplates() {
 
   const handleEdit = (template: Template, e: React.MouseEvent) => {
     e.stopPropagation();
-    console.log("Edit template", template.id);
     // Redirect to product studio with template ID to edit
     router.push(`/seller/studio?product=${template.product_id}&templateId=${template.id}`);
   }
 
   // Filter templates based on search and filters
-  const filteredTemplates = templates.filter((template) => {
+  const filteredTemplates = Array.isArray(templates) ? templates.filter((template) => {
     const matchesSearch =
       template.title.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = filterStatus === "All" || template.status === filterStatus.toUpperCase();
 
     return matchesSearch && matchesStatus;
-  });
+  }) : [];
 
   if (isLoading) {
     return <div className="p-8 text-center text-gray-500">Loading templates...</div>;
@@ -109,7 +189,44 @@ export default function SellerTemplates() {
 
   return (
     <div className="mx-auto max-w-screen-2xl">
-      {/* Header & Stats could go here */}
+      {/* Template Usage Status Bar */}
+      <div className="mb-6 rounded-lg border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-black dark:text-white">
+              Template Usage
+            </h3>
+            <p className="text-sm text-body dark:text-bodydark">
+              {templates.length} / 50 templates used
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <div className="text-2xl font-bold text-black dark:text-white">
+                {Math.round((templates.length / 50) * 100)}%
+              </div>
+              <div className="text-xs text-body dark:text-bodydark">
+                Usage
+              </div>
+            </div>
+            <div className="w-32">
+              <div className="mb-2 flex justify-between text-xs text-body dark:text-bodydark">
+                <span>{templates.length}</span>
+                <span>50</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                <div 
+                  className="h-2 rounded-full transition-all duration-300"
+                  style={{ 
+                    width: `${(templates.length / 50) * 100}%`,
+                    backgroundColor: templates.length >= 50 ? '#EF4444' : templates.length >= 40 ? '#F59E0B' : '#10B981'
+                  }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Filter and search section */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -141,16 +258,50 @@ export default function SellerTemplates() {
         </select>
       </div>
 
-      {/* Template Cards Grid */}
+      {/* Template Cards Grid — FIX 1: xl:grid-cols-4 for 4 columns */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-4 2xl:gap-7.5">
         {filteredTemplates.length > 0 ? (
           filteredTemplates.map((template) => (
             <div
               key={template.id}
+              onMouseEnter={() => setHoveredId(template.id)}
+              onMouseLeave={() => setHoveredId(null)}
               onClick={() => template.status === 'REJECTED' ? handleEdit(template, { stopPropagation: () => { } } as any) : null}
-              className={`group relative overflow-hidden rounded-lg border bg-white shadow-default dark:bg-boxdark h-96 transition-all duration-300 ${template.status === 'REJECTED' ? 'border-red-500/50 cursor-pointer' : 'border-stroke dark:border-strokedark'
-                }`}
+              className={`relative overflow-hidden rounded-lg border bg-white shadow-default dark:bg-boxdark transition-all duration-300 ${template.status === 'REJECTED' ? 'border-red-500/50 cursor-pointer' : 'border-stroke dark:border-strokedark'}`}
+              style={{ height: '280px' }}
             >
+              {/* Background image layer */}
+              <div className="absolute inset-0 w-full h-full">
+                {template.product?.product_images && template.product.product_images.length > 0 ? (
+                  <div className="h-full w-full flex overflow-x-auto scroll-snap-x scroll-smooth">
+                    {template.product.product_images.map((img, idx) => (
+                      <div key={idx} className="min-w-full h-full scroll-snap-align-start">
+                        <img
+                          src={getImageUrl(img.image_url)}
+                          alt={`${template.title} view ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                          onError={(e: any) => e.target.src = '/images/placeholder-product.png'}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : template.thumbnail_image ? (
+                  <img
+                    src={getImageUrl(template.thumbnail_image)}
+                    alt={template.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
+                    <svg className="h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                )}
+                {/* Dark overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
+              </div>
+
               {/* Status Badge */}
               <div className="absolute top-3 right-3 z-10">
                 <Badge
@@ -164,75 +315,57 @@ export default function SellerTemplates() {
                 </Badge>
               </div>
 
-              {/* Full-screen template image */}
-              <div className="absolute inset-0 w-full h-full">
-                {template.thumbnail_image ? (
-                  <img
-                    src={getImageUrl(template.thumbnail_image)}
-                    alt={template.title}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
-                    <svg className="h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                )}
-
-                {/* Dark overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
+              {/* Delete button — top left */}
+              <div className="absolute top-3 left-3 z-10">
+                <button
+                  onClick={(e) => handleDeleteClick(template.id, e)}
+                  className="p-1.5 rounded-full bg-black/40 text-white hover:bg-red-600 transition-colors"
+                  title="Delete Template"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
               </div>
 
-              {/* Overlaid content */}
-              <div className="absolute inset-0 flex flex-col justify-between p-6">
-                {/* Actions Top Left */}
-                <div className="self-start z-10">
-                  <button
-                    onClick={(e) => handleDelete(template.id, e)}
-                    className="p-1.5 rounded-full bg-black/40 text-white hover:bg-red-600 transition-colors"
-                    title="Delete Template"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="text-center mt-auto">
-                  <h4 className="text-xl font-bold text-white drop-shadow-lg">
-                    {template.title}
-                  </h4>
-                  {template.status === 'REJECTED' && template.admin_feedback && (
-                    <div className="mt-2 p-2 bg-red-500/80 rounded text-xs text-white backdrop-blur-sm">
-                      Reason: {template.admin_feedback}
-                      <div className="mt-1 font-bold underline">Click card to fix</div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Create Order Button - Only visible on hover and if Approved */}
-                {template.status === 'APPROVED' && (
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 bg-black/20 backdrop-blur-sm">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCreateOrderFromTemplate(template);
-                      }}
-                      className="bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 hover:scale-105 transition-all duration-200 shadow-lg border border-white/20"
-                    >
-                      Create Order
-                    </button>
+              {/* Bottom info: title + price + feedback + date */}
+              <div className="absolute bottom-0 left-0 right-0 z-10 p-4">
+                <h4 className="text-lg font-bold text-white drop-shadow-lg text-center">
+                  {template.title}
+                </h4>
+                {template.calculated_price && (
+                  <div className="mt-1 text-center">
+                    <span className="inline-block bg-primary/90 text-white px-3 py-1 rounded-full text-sm font-semibold backdrop-blur-sm">
+                      {parseFloat(String(template.calculated_price)).toFixed(2)} DH
+                    </span>
                   </div>
                 )}
-
-                {/* Date */}
-                <div className="flex items-center justify-end mt-4">
-                  <div className="text-xs text-gray-300">
-                    {new Date(template.created_at).toLocaleDateString()}
+                {template.status === 'REJECTED' && template.admin_feedback && (
+                  <div className="mt-1.5 p-2 bg-red-500/80 rounded text-xs text-white backdrop-blur-sm text-center">
+                    Reason: {template.admin_feedback}
+                    <div className="mt-1 font-bold underline">Click card to fix</div>
                   </div>
+                )}
+                <div className="mt-2 text-xs text-gray-300 text-right">
+                  {new Date(template.created_at).toLocaleDateString()}
                 </div>
               </div>
+
+              {/* Create Order button — shown via React state, no group-hover */}
+              {template.status === 'APPROVED' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCreateOrderFromTemplate(template);
+                  }}
+                  className="absolute inset-0 z-20 flex items-center justify-center transition-opacity duration-200"
+                  style={{ opacity: hoveredId === template.id ? 1 : 0, pointerEvents: hoveredId === template.id ? 'auto' : 'none' }}
+                >
+                  <span className="bg-primary text-white px-6 py-2.5 rounded-lg font-medium shadow-lg border border-white/20 hover:bg-primary/90 hover:scale-105 transition-all duration-200">
+                    Create Order
+                  </span>
+                </button>
+              )}
             </div>
           ))
         ) : (
@@ -246,6 +379,17 @@ export default function SellerTemplates() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteId(null); }}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Template"
+        message="Are you sure you want to delete this template?"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+      />
     </div>
   );
 }

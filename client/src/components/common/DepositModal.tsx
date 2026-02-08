@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from 'sonner';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import Input from '@/components/form/input/InputField';
@@ -29,46 +30,39 @@ interface DepositModalProps {
   onClose: () => void;
   onSuccess: () => void;
   bankDetails: BankDetails;
+  settings?: any;
 }
 
-const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess, bankDetails }) => {
+const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess, bankDetails, settings }) => {
   const [selectedBank, setSelectedBank] = useState<'CIH' | 'ATTIJARI' | ''>('');
   const [amount, setAmount] = useState('');
   const [receipt, setReceipt] = useState<File | null>(null);
-  const [transferReference, setTransferReference] = useState('');
   const [loading, setLoading] = useState(false);
-
+  const MIN_DEPOSIT = settings?.min_deposit_amount?.value ? parseFloat(settings.min_deposit_amount.value) : 50;
+  const MAX_DEPOSIT = settings?.max_deposit_amount?.value ? parseFloat(settings.max_deposit_amount.value) : 50000;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!amount || !receipt || !selectedBank || !transferReference) {
-      alert('Please fill all required fields');
+    if (!amount || !receipt || !selectedBank) {
+      toast.error('Please fill all required fields');
       return;
     }
 
     const amountNum = parseFloat(amount);
-    if (amountNum < 50 || amountNum > 50000) {
-      alert('Amount must be between 50 DH and 50,000 DH');
+    if (amountNum < MIN_DEPOSIT || amountNum > MAX_DEPOSIT) {
+      toast.error(`Amount must be between ${MIN_DEPOSIT} DH and ${MAX_DEPOSIT.toLocaleString()} DH`);
       return;
     }
 
     setLoading(true);
     
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       
       const formData = new FormData();
       formData.append('amount', amount);
       formData.append('bank_name', selectedBank);
       formData.append('receipt_image', receipt);
-      formData.append('reference_number', transferReference);
-
-      console.log('Submitting deposit request:', {
-        amount,
-        bank_name: selectedBank,
-        reference_number: transferReference,
-        receipt_name: receipt?.name
-      });
 
       const response = await fetch(`${API_URL}/api/seller/deposits`, {
         method: 'POST',
@@ -84,24 +78,21 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess,
         data = await response.json();
       } catch (parseError) {
         console.error('Failed to parse response as JSON:', parseError);
-        console.log('Raw response:', await response.clone().text());
         throw new Error('Invalid response format');
       }
       
-      console.log('Deposit response:', { status: response.status, data });
-      
       if (response.ok) {
-        alert('Deposit request submitted successfully!');
+        toast.success('Deposit request submitted successfully!');
         handleClose();
         onSuccess();
       } else {
         console.error('Deposit submission failed:', data);
         const errorMessage = data?.message || data?.errors || 'Failed to submit deposit request';
-        alert(Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage);
+        toast.error(Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage);
       }
     } catch (error) {
       console.error('Error submitting deposit:', error);
-      alert('Failed to submit deposit request');
+      toast.error('Failed to submit deposit request');
     } finally {
       setLoading(false);
     }
@@ -111,16 +102,11 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess,
     const file = event.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        alert('File size must be less than 5MB');
+        toast.error('File size must be less than 5MB');
+        event.target.value = ''; // Clear the input
         return;
       }
-      
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-      if (!allowedTypes.includes(file.type)) {
-        alert('Please upload a valid image file (JPG, PNG)');
-        return;
-      }
-      
+
       setReceipt(file);
     }
   };
@@ -129,7 +115,6 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess,
     setSelectedBank('');
     setAmount('');
     setReceipt(null);
-    setTransferReference('');
     onClose();
   };
 
@@ -151,6 +136,21 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess,
         </div>
 
         <div className="space-y-6">
+          {/* Important Notice */}
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 dark:bg-amber-900/20 dark:border-amber-800">
+            <div className="flex gap-3">
+              <svg className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200">Important Notice</h3>
+                <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                  If your transfer was not instant, please wait until we receive the payment. Your deposit will be processed once the funds are confirmed in our account.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Bank Selection */}
           <div>
             <Label htmlFor="bank-select">Choose Bank Account *</Label>
@@ -168,25 +168,13 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess,
             <Input
               id="amount"
               type="number"
-              placeholder="Enter amount (min: 50 DH, max: 50,000 DH)"
+              placeholder={`Enter amount (min: ${MIN_DEPOSIT} DH, max: ${MAX_DEPOSIT.toLocaleString()} DH)`}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              min="50"
-              max="50000"
+              min={MIN_DEPOSIT.toString()}
+              max={MAX_DEPOSIT.toString()}
             />
-            <p className="mt-1 text-xs text-gray-500">Minimum: 50 DH, Maximum: 50,000 DH</p>
-          </div>
-
-          {/* Transfer Reference */}
-          <div>
-            <Label htmlFor="reference">Transfer Reference Number *</Label>
-            <Input
-              id="reference"
-              type="text"
-              placeholder="Enter the reference number from your bank transfer"
-              value={transferReference}
-              onChange={(e) => setTransferReference(e.target.value)}
-            />
+            <p className="mt-1 text-xs text-gray-500">Minimum: {MIN_DEPOSIT} DH, Maximum: {MAX_DEPOSIT.toLocaleString()} DH</p>
           </div>
 
           {/* Receipt Upload */}
@@ -195,6 +183,7 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess,
             <div className="mt-2">
               <FileInput
                 onChange={handleFileUpload}
+                accept="image/jpeg,image/jpg,image/png"
                 className="mb-2"
               />
               {receipt && (
@@ -212,7 +201,7 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess,
               )}
             </div>
             <p className="mt-1 text-xs text-gray-500">
-              Upload a clear photo of your transfer receipt. Max size: 5MB. Formats: JPG, PNG
+              Upload a clear photo of your transfer receipt. Max size: 5MB. Formats: JPG, PNG only
             </p>
           </div>
 
@@ -230,7 +219,7 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess,
             <Button
               onClick={handleSubmit}
               className="flex-1"
-              disabled={loading || !amount || !receipt || !selectedBank || !transferReference}
+              disabled={loading || !amount || !receipt || !selectedBank}
             >
               {loading ? 'Submitting...' : 'Submit Deposit Request'}
             </Button>

@@ -16,7 +16,10 @@ import {
 } from 'lucide-react';
 import DepositModal from '@/components/common/DepositModal';
 import WithdrawalModal from '@/components/common/WithdrawalModal';
+import PointsExchangeModal from '@/components/common/PointsExchangeModal';
 import { useAuth } from '@/context/AuthContext';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
 
 interface Transaction {
   id: number;
@@ -47,7 +50,7 @@ interface BankDetails {
 }
 
 const TransactionsPage = () => {
-  const { fetchUserData } = useAuth();
+  const { fetchUserData, user } = useAuth();
   const [deposits, setDeposits] = useState<Transaction[]>([]);
   const [withdrawals, setWithdrawals] = useState<Transaction[]>([]);
   const [bankDetails, setBankDetails] = useState<BankDetails | null>(null);
@@ -56,11 +59,14 @@ const TransactionsPage = () => {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [showBankDetailsModal, setShowBankDetailsModal] = useState(false);
+  const [showPointsExchangeModal, setShowPointsExchangeModal] = useState(false);
+  const [settings, setSettings] = useState<any>(null);
 
   useEffect(() => {
     fetchTransactions();
     fetchBankDetails();
     fetchUserBalance();
+    fetchSettings();
 
     // Refresh balance when window regains focus (useful after admin validation)
     const handleFocus = () => {
@@ -78,10 +84,10 @@ const TransactionsPage = () => {
   const fetchTransactions = async () => {
     try {
       const [depositsRes, withdrawalsRes] = await Promise.all([
-        fetch('/api/seller/deposits', {
+        fetch(`${API_URL}/api/seller/deposits`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }),
-        fetch('/api/seller/withdrawals', {
+        fetch(`${API_URL}/api/seller/withdrawals`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         })
       ]);
@@ -98,9 +104,24 @@ const TransactionsPage = () => {
     }
   };
 
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/seller/settings`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSettings(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+    }
+  };
+
   const fetchBankDetails = async () => {
     try {
-      const response = await fetch('/api/seller/bank-details', {
+      const response = await fetch(`${API_URL}/api/seller/bank-details`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       
@@ -115,7 +136,7 @@ const TransactionsPage = () => {
 
   const fetchUserBalance = async () => {
     try {
-      const response = await fetch('/api/user', {
+      const response = await fetch(`${API_URL}/api/user`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       
@@ -194,7 +215,7 @@ const TransactionsPage = () => {
       </div>
 
       {/* Balance Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Current Balance</CardTitle>
@@ -204,6 +225,23 @@ const TransactionsPage = () => {
             <div className="text-2xl font-bold text-green-600">
               {userBalance.toLocaleString('en-MA')} DH
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Points Balance</CardTitle>
+            <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              {(user?.points || 0).toLocaleString('en-MA')} pts
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              1,000 pts = 100 DH
+            </p>
           </CardContent>
         </Card>
 
@@ -233,10 +271,10 @@ const TransactionsPage = () => {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-4">
+      <div className="flex gap-4 flex-wrap">
         <Button 
           onClick={() => setShowDepositModal(true)}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 border-2 border-green-500 hover:border-green-600 shadow-sm"
         >
           <ArrowDownIcon className="h-4 w-4" />
           Make Deposit
@@ -244,26 +282,37 @@ const TransactionsPage = () => {
         <Button 
           onClick={() => setShowWithdrawalModal(true)}
           variant="outline"
-          className="flex items-center gap-2"
-          disabled={userBalance < 100}
+          className="flex items-center gap-2 shadow-sm"
+          disabled={userBalance < parseFloat(settings?.min_withdrawal?.value || '100')}
         >
           <ArrowUpIcon className="h-4 w-4" />
           Request Withdrawal
         </Button>
         <Button 
+          onClick={() => setShowPointsExchangeModal(true)}
+          variant="outline"
+          className="flex items-center gap-2 border-2 border-blue-500 hover:border-blue-600 shadow-sm"
+          disabled={(user?.points || 0) < 1000}
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Exchange Points
+        </Button>
+        <Button 
           onClick={() => setShowBankDetailsModal(true)}
           variant="outline"
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 border-2 border-purple-500 hover:border-purple-600 shadow-sm"
         >
           <BanknotesIcon className="h-4 w-4" />
           View Bank Details
         </Button>
       </div>
 
-      {userBalance < 100 && (
+      {userBalance < parseFloat(settings?.min_withdrawal?.value || '100') && (
         <div className="bg-orange-50 border border-orange-200 rounded-md p-4">
           <p className="text-sm text-orange-700">
-            Minimum balance of 100 DH required for withdrawal requests.
+            Minimum balance of {parseFloat(settings?.min_withdrawal?.value || '100').toLocaleString('en-MA')} DH required for withdrawal requests.
           </p>
         </div>
       )}
@@ -348,6 +397,7 @@ const TransactionsPage = () => {
           onClose={() => setShowDepositModal(false)}
           onSuccess={handleDepositSuccess}
           bankDetails={bankDetails}
+          settings={settings}
         />
       )}
 
@@ -357,6 +407,20 @@ const TransactionsPage = () => {
           onClose={() => setShowWithdrawalModal(false)}
           onSuccess={handleWithdrawalSuccess}
           currentBalance={userBalance}
+          settings={settings}
+          user={user}
+        />
+      )}
+
+      {showPointsExchangeModal && (
+        <PointsExchangeModal
+          isOpen={showPointsExchangeModal}
+          onClose={() => setShowPointsExchangeModal(false)}
+          onSuccess={() => {
+            fetchUserBalance();
+            fetchUserData();
+          }}
+          currentPoints={user?.points || 0}
         />
       )}
 

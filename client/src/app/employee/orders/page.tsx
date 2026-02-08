@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { extractList } from "@/lib/extractList";
 import { useToast } from "@/hooks/use-toast";
 
 export default function EmployeeOrdersPage() {
@@ -33,7 +34,7 @@ export default function EmployeeOrdersPage() {
 
       setLoading(true);
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
         const response = await fetch(`${API_URL}/api/admin/orders`, {
           headers: {
             'Accept': 'application/json',
@@ -94,7 +95,7 @@ export default function EmployeeOrdersPage() {
                     </td>
                     <td className="px-4 py-3">{order.product?.name || 'N/A'}</td>
                     <td className="px-4 py-3">{order.quantity || 0}</td>
-                    <td className="px-4 py-3">${order.total_amount?.toFixed(2) || '0.00'}</td>
+                    <td className="px-4 py-3">{order.total_amount?.toFixed(2) || '0.00'} DH</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 text-xs rounded ${
                         order.status === 'PAID' || order.status === 'SHIPPED' 

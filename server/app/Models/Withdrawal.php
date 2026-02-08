@@ -12,6 +12,8 @@ class Withdrawal extends Model
         'amount',
         'fee',
         'net_amount',
+        'bank_name',
+        'is_instant',
         'status',
         'bank_details',
         'admin_notes',

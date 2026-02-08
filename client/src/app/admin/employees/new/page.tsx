@@ -5,9 +5,12 @@ import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import { extractList } from "@/lib/extractList";
 
 export default function NewEmployeePage() {
   const { toast } = useToast();
+  const { token } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,12 +33,15 @@ export default function NewEmployeePage() {
     setLoading(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       const res = await fetch(`${API_URL}/api/admin/employees`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, role_id: roleId, password }),
-        credentials: 'include'
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ name, email, role_id: roleId, password })
       });
 
       if (!res.ok) {
@@ -60,22 +66,28 @@ export default function NewEmployeePage() {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      if (!token) return;
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const res = await fetch(`${API_URL}/api/admin/roles`, { credentials: 'include' });
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const res = await fetch(`${API_URL}/api/admin/roles`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
-        const list = data?.data || data || [];
+        const list = extractList(data);
         if (mounted) {
-          setAvailableRoles(Array.isArray(list) ? list : []);
-          if (Array.isArray(list) && list.length > 0) setRoleId(String(list[0].id));
+          setAvailableRoles(list);
+          if (list.length > 0) setRoleId(String(list[0].id));
         }
       } catch (e) {
         // ignore
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [token]);
 
   return (
     <div className="max-w-3xl">
@@ -119,9 +131,8 @@ export default function NewEmployeePage() {
           <button
             type="submit"
             disabled={loading}
-            className={`inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-5 py-3.5 text-sm bg-brand-500 text-white shadow-theme-xs hover:bg-brand-600 disabled:bg-brand-300 ${
-              loading ? "opacity-60 cursor-wait" : ""
-            }`}
+            className={`inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-5 py-3.5 text-sm bg-brand-500 text-white shadow-theme-xs hover:bg-brand-600 disabled:bg-brand-300 ${loading ? "opacity-60 cursor-wait" : ""
+              }`}
           >
             {loading ? "Creating..." : "Create Employee"}
           </button>

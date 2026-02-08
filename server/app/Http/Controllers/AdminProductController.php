@@ -78,6 +78,7 @@ class AdminProductController extends Controller
             'available_sizes.*' => 'string',
             'is_active' => 'sometimes|boolean',
             'in_stock' => 'sometimes|boolean',
+            'product_image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // 5MB max
             'views' => 'sometimes|array',
             'views.*.key' => 'required|string|max:50',
             'views.*.name' => 'required|string|max:100',
@@ -88,11 +89,16 @@ class AdminProductController extends Controller
             'views.*.area.height' => 'nullable|numeric|min:1|max:100',
             // Mockup can be a newly uploaded file or an existing URL/path string
             'views.*.mockup' => 'nullable',
+            'views.*.color' => 'nullable|string|max:50',
             // Mockup uploads
             'front_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
             'back_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
             'left_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
             'right_mockup' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'gallery' => 'sometimes|array',
+            'gallery.*.image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'gallery.*.url' => 'nullable|string',
+            'gallery.*.color' => 'nullable|string|max:50',
             // Print areas (percent-based)
             'print_areas' => 'sometimes|array',
             'print_areas.front.x' => 'numeric|min:0|max:100',
@@ -116,7 +122,7 @@ class AdminProductController extends Controller
         $product = Product::create([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
-            'category' => $validated['category'] ?? null,
+            'category' => $validated['category'] ?? 'General',
             'base_price' => $validated['base_price'],
             'available_colors' => $validated['available_colors'] ?? [],
             'available_sizes' => $validated['available_sizes'] ?? [],
@@ -127,10 +133,25 @@ class AdminProductController extends Controller
             'views' => [],
         ]);
 
+        // Handle image upload if a file is provided
+        if ($request->hasFile('product_image')) {
+            // Store new image directly in public/images/products
+            $file = $request->file('product_image');
+            $extension = $file->getClientOriginalExtension();
+            // Use timestamp to ensure unique filename and avoid browser caching issues
+            $filename = sprintf('product-%d-%d.%s', $product->id, time(), $extension);
+            $file->move(public_path('images/products'), $filename);
+            
+            $product->image_url = '/images/products/' . $filename;
+        }
+
         $viewsData = $this->buildViewsPayload($request, $validated, $product->id);
         $product->mockups = $viewsData['mockups'];
         $product->print_areas = $viewsData['print_areas'];
         $product->views = $viewsData['views'];
+        
+        $product->gallery = $this->buildGalleryPayload($request, $product->id);
+        
         $product->save();
 
         return response()->json([
@@ -217,6 +238,11 @@ class AdminProductController extends Controller
             'views.*.area.height' => 'nullable|numeric|min:1|max:100',
             // Mockup can be a newly uploaded file or an existing URL/path string
             'views.*.mockup' => 'nullable',
+            'views.*.color' => 'nullable|string|max:50',
+            'gallery' => 'sometimes|array',
+            'gallery.*.image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
+            'gallery.*.url' => 'nullable|string',
+            'gallery.*.color' => 'nullable|string|max:50',
         ]);
 
         // Handle image upload if a file is provided
@@ -249,6 +275,8 @@ class AdminProductController extends Controller
         if (!empty($viewsData['views'])) {
             $validated['views'] = $viewsData['views'];
         }
+
+        $validated['gallery'] = $this->buildGalleryPayload($request, $product->id, $product->gallery ?? []);
 
         $product->update($validated);
 
@@ -365,23 +393,31 @@ class AdminProductController extends Controller
             $area = $view['area'] ?? null;
             $fileField = "views.$index.mockup";
             $price = $view['price'] ?? null;
-
+            $color = $view['color'] ?? null;
             $mockupPath = $view['mockup'] ?? null;
 
             if ($request->hasFile($fileField)) {
                 $mockupPath = $this->storeMockupFile($request->file($fileField), $key, $productId);
             } elseif (!empty($existingViews)) {
                 $existing = collect($existingViews)->firstWhere('key', $key);
+                // Also check by name and color if key is generic to find matching existing mockup
+                if (!$existing && isset($view['name'])) {
+                    $existing = collect($existingViews)
+                        ->where('name', $view['name'])
+                        ->where('color', $color)
+                        ->first();
+                }
+                
                 if ($existing && !empty($existing['mockup'])) {
                     $mockupPath = $existing['mockup'];
                 }
             }
 
             if ($mockupPath) {
-                $mockups[$key] = $mockupPath;
+                $mockups[$key . ($color ? '_' . Str::slug($color) : '')] = $mockupPath;
             }
             if ($area) {
-                $printAreas[$key] = $area;
+                $printAreas[$key . ($color ? '_' . Str::slug($color) : '')] = $area;
             }
 
             $views[] = [
@@ -390,6 +426,7 @@ class AdminProductController extends Controller
                 'mockup' => $mockupPath,
                 'price' => $price,
                 'area' => $area,
+                'color' => $color,
             ];
         }
 
@@ -398,5 +435,42 @@ class AdminProductController extends Controller
             'mockups' => $mockups,
             'print_areas' => $printAreas,
         ];
+    }
+
+    /**
+     * Build gallery payload from request
+     */
+    private function buildGalleryPayload(Request $request, $productId, $existingGallery = [])
+    {
+        $gallery = [];
+        $galleryInput = $request->input('gallery', []);
+
+        foreach ($galleryInput as $index => $item) {
+            $color = $item['color'] ?? null;
+            $url = $item['url'] ?? null;
+            $fileField = "gallery.$index.image";
+
+            if ($request->hasFile($fileField)) {
+                $file = $request->file($fileField);
+                $extension = $file->getClientOriginalExtension();
+                $filename = sprintf('product-%d-gallery-%d-%d.%s', $productId, $index, time(), $extension);
+                
+                if (!file_exists(public_path('images/products/gallery'))) {
+                    mkdir(public_path('images/products/gallery'), 0777, true);
+                }
+                
+                $file->move(public_path('images/products/gallery'), $filename);
+                $url = '/images/products/gallery/' . $filename;
+            }
+
+            if ($url) {
+                $gallery[] = [
+                    'url' => $url,
+                    'color' => $color,
+                ];
+            }
+        }
+
+        return $gallery;
     }
 }

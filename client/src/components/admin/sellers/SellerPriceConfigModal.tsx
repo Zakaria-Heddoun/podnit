@@ -3,6 +3,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Seller } from "@/types/datatable";
 import { useAuth } from "@/context/AuthContext";
+import { getImageUrl } from "@/lib/utils";
 
 interface Product {
     id: number;
@@ -34,7 +35,7 @@ export default function SellerPriceConfigModal({ isOpen, onClose, seller }: Sell
     const fetchData = async () => {
         setLoading(true);
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
 
             // Fetch all products
             const productsRes = await fetch(`${API_URL}/api/admin/products?per_page=100`, {
@@ -76,7 +77,7 @@ export default function SellerPriceConfigModal({ isOpen, onClose, seller }: Sell
     const handleSave = async () => {
         setSaving(true);
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
             const payload = {
                 products: Object.entries(prices).map(([productId, price]) => ({
                     product_id: parseInt(productId),
@@ -160,7 +161,7 @@ export default function SellerPriceConfigModal({ isOpen, onClose, seller }: Sell
                                                     <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
                                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                                         <img
-                                                            src={product.image_url || "https://placehold.co/48x48"}
+                                                            src={getImageUrl(product.image_url)}
                                                             alt={product.name}
                                                             className="h-full w-full object-cover"
                                                         />

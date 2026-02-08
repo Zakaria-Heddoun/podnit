@@ -1,0 +1,10 @@
+# robots.txt for Podnit
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /seller/
+Disallow: /employee/
+Disallow: /api/
+
+# Sitemap
+Sitemap: http://podnit.com/sitemap.xml

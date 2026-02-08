@@ -16,6 +16,7 @@ interface Product {
   available_colors: string[];
   available_sizes: string[];
   image_url: string;
+  gallery?: { url: string; color: string | null }[];
   is_active: boolean;
   in_stock: boolean;
   created_at: string;
@@ -57,11 +58,20 @@ const transformProduct = (product: Product) => {
     id: product.id.toString(),
     name: product.name,
     sizes: product.available_sizes,
-    images: colors.map((color, index) => ({
-      id: `${product.id}-${index}`,
-      color: color,
-      images: [product.image_url, product.image_url] // Use same image for now
-    })),
+    images: colors.map((color, index) => {
+      // Find gallery images for this hex color
+      // Backend stores either names or hex. transformProduct works with hex here.
+      // We need to match the user's color selection.
+      const galleryImages = (product.gallery || [])
+        .filter(g => !g.color || g.color === color)
+        .map(g => g.url);
+
+      return {
+        id: `${product.id}-${index}`,
+        color: color,
+        images: galleryImages.length > 0 ? galleryImages : [product.image_url]
+      };
+    }),
     colors: colors,
     category: product.category,
     price: product.base_price,
@@ -105,7 +115,7 @@ export default function SellerProducts() {
         }
         params.append('per_page', '20');
 
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
         const response = await fetch(`${API_URL}/api/seller/products?${params}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -115,8 +125,8 @@ export default function SellerProducts() {
 
         if (response.ok) {
           const data = await response.json();
-          // The API returns paginated data in data.data
-          const productsData = data.data || [];
+          // Accept paginator or legacy array
+          const productsData = Array.isArray(data.data) ? data.data : (data.data?.data || []);
 
           // Map API data to Product interface
           const mappedProducts: Product[] = productsData.map((item: any) => {
@@ -136,6 +146,10 @@ export default function SellerProducts() {
               available_colors: Array.isArray(item.available_colors) ? item.available_colors : [],
               available_sizes: Array.isArray(item.available_sizes) ? item.available_sizes : [],
               image_url: imageUrl,
+              gallery: Array.isArray(item.gallery) ? item.gallery.map((g: any) => ({
+                ...g,
+                url: g.url && g.url.startsWith('/') ? `${API_URL}${g.url}` : g.url
+              })) : [],
               is_active: Boolean(item.is_active),
               in_stock: Boolean(item.in_stock),
               created_at: item.created_at,
@@ -175,15 +189,17 @@ export default function SellerProducts() {
   }, [selectedCategory, searchTerm, token, loadingAuth]);
 
   const handleSimpleProduct = (productId: string) => {
-    console.log(`Simple product selected for: ${productId}`);
     // Navigate to create order page with product ID
     router.push(`/seller/create-order?productId=${productId}`);
   };
 
   const handleCustomProduct = (productId: string) => {
-    console.log(`Custom product selected for: ${productId}`);
     // Navigate to the integrated t-shirt designer studio
     router.push(`/seller/studio?product=${productId}`);
+  };
+
+  const handleViewMockup = (productId: string) => {
+    router.push(`/seller/products/${productId}`);
   };
 
   // Transform products for display
@@ -258,6 +274,8 @@ export default function SellerProducts() {
                 inStock={product.inStock}
                 onSimpleProduct={() => handleSimpleProduct(product.id)}
                 onCustomProduct={() => handleCustomProduct(product.id)}
+                onViewMockup={() => handleViewMockup(product.id)}
+                price={product.price}
                 className="dark:bg-boxdark dark:border-strokedark"
               />
             ))}

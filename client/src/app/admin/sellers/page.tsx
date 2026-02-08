@@ -28,7 +28,7 @@ export default function AdminSellersPage() {
   const fetchSellers = async () => {
     setLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
       const response = await fetch(`${API_URL}/api/admin/sellers`, {
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -37,7 +37,8 @@ export default function AdminSellersPage() {
       });
       if (response.ok) {
         const result = await response.json();
-        setSellers(result.data.data || []);
+        const list = Array.isArray(result.data) ? result.data : (result.data?.data || []);
+        setSellers(list);
       }
     } catch (error) {
       console.error("Error fetching sellers:", error);
@@ -49,7 +50,7 @@ export default function AdminSellersPage() {
   const handleActivate = async (seller: Seller) => {
     if (!token) return;
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
       const response = await fetch(`${API_URL}/api/admin/sellers/${seller.id}/activate`, {
         method: "PUT",
         headers: {
@@ -60,6 +61,16 @@ export default function AdminSellersPage() {
         body: JSON.stringify({ is_active: !seller.is_active })
       });
       if (response.ok) {
+        // If deactivating seller, also logout their session
+        if (seller.is_active) {
+          await fetch(`${API_URL}/api/admin/sellers/${seller.id}/logout`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Accept": "application/json"
+            }
+          });
+        }
         fetchSellers();
       }
     } catch (error) {
@@ -81,7 +92,7 @@ export default function AdminSellersPage() {
     e.preventDefault();
     if (!editingSeller || !token) return;
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
 
       // Filter out empty password if it wasn't changed
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

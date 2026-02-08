@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Badge from "@/components/ui/badge/Badge";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 // Transaction interface (same as in main page)
 interface Transaction {
@@ -88,6 +90,8 @@ export default function TransactionDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false);
 
   const transactionId = params.id as string;
 
@@ -148,9 +152,8 @@ export default function TransactionDetailsPage() {
       }
 
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
 
-        console.log('Transaction ID from URL:', transactionId); // Debug log
 
         // Extract ID from transaction ID format (DEP-000001 or WITH-000001)
         const isDeposit = transactionId.startsWith('DEP-');
@@ -158,13 +161,11 @@ export default function TransactionDetailsPage() {
           parseInt(transactionId.split('-')[1]) :
           parseInt(transactionId);
 
-        console.log('Is Deposit:', isDeposit, 'Actual ID:', actualId); // Debug log
 
         const endpoint = isDeposit
           ? `${API_URL}/api/admin/deposits/${actualId}`
           : `${API_URL}/api/admin/withdrawals/${actualId}`;
 
-        console.log('API Endpoint:', endpoint); // Debug log
 
         const response = await fetch(endpoint, {
           headers: {
@@ -173,18 +174,15 @@ export default function TransactionDetailsPage() {
           }
         });
 
-        console.log('Response status:', response.status); // Debug log
 
         if (response.ok) {
           const result = await response.json();
-          console.log('API Response:', result); // Debug log
 
           if (result.success && result.data) {
             const transformedTransaction = isDeposit
               ? transformDeposit(result.data)
               : transformWithdrawal(result.data);
 
-            console.log('Transformed transaction:', transformedTransaction); // Debug log
             setTransaction(transformedTransaction);
           } else {
             console.error('API returned success=false or no data:', result);
@@ -207,17 +205,26 @@ export default function TransactionDetailsPage() {
   }, [transactionId, user, token, router]);
 
   // Handle transaction actions
-  const handleApproveTransaction = async () => {
-    if (!token || !transaction) return;
+  const handleApproveClick = () => {
+    if (!token || !transaction) {
+      toast.error('Authentication required');
+      return;
+    }
+    setApproveConfirmOpen(true);
+  };
 
+  const handleApproveConfirm = async () => {
+    if (!transaction || !token) return;
+    setApproveConfirmOpen(false);
     setActionLoading('approve');
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       const endpoint = transaction.type === 'Deposit'
         ? `${API_URL}/api/admin/deposits/${transaction.id}`
         : `${API_URL}/api/admin/withdrawals/${transaction.id}`;
 
       const status = transaction.type === 'Deposit' ? 'VALIDATED' : 'PROCESSED';
+
 
       const response = await fetch(endpoint, {
         method: 'PUT',
@@ -232,26 +239,42 @@ export default function TransactionDetailsPage() {
         })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
+        toast.success('Transaction approved successfully!');
         // Refresh the page to show updated status
         window.location.reload();
+      } else {
+        console.error('Failed to approve:', data);
+        toast.error(`Failed to approve transaction: ${data.message || data.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error approving transaction:', error);
+      toast.error('An error occurred while approving the transaction');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleRejectTransaction = async () => {
-    if (!token || !transaction) return;
+  const handleRejectClick = () => {
+    if (!token || !transaction) {
+      toast.error('Authentication required');
+      return;
+    }
+    setRejectConfirmOpen(true);
+  };
 
+  const handleRejectConfirm = async () => {
+    if (!transaction || !token) return;
+    setRejectConfirmOpen(false);
     setActionLoading('reject');
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       const endpoint = transaction.type === 'Deposit'
         ? `${API_URL}/api/admin/deposits/${transaction.id}`
         : `${API_URL}/api/admin/withdrawals/${transaction.id}`;
+
 
       const response = await fetch(endpoint, {
         method: 'PUT',
@@ -266,12 +289,19 @@ export default function TransactionDetailsPage() {
         })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
+        toast.success('Transaction rejected successfully!');
         // Refresh the page to show updated status
         window.location.reload();
+      } else {
+        console.error('Failed to reject:', data);
+        toast.error(`Failed to reject transaction: ${data.message || data.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error rejecting transaction:', error);
+      toast.error('An error occurred while rejecting the transaction');
     } finally {
       setActionLoading(null);
     }
@@ -490,7 +520,7 @@ export default function TransactionDetailsPage() {
               <div className="space-y-4">
                 <div className="relative group">
                   <Image
-                    src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/storage/${transaction.receiptImage}`}
+                    src={`${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/storage/${transaction.receiptImage}`}
                     alt="Payment Receipt"
                     width={300}
                     height={400}
@@ -505,12 +535,6 @@ export default function TransactionDetailsPage() {
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => setIsImageModalOpen(true)}
-                  className="w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2 px-4 rounded-lg transition-colors"
-                >
-                  View Full Size
-                </button>
               </div>
             </div>
           )}
@@ -523,7 +547,7 @@ export default function TransactionDetailsPage() {
               </h3>
               <div className="space-y-3">
                 <button
-                  onClick={handleApproveTransaction}
+                  onClick={handleApproveClick}
                   disabled={!!actionLoading}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
@@ -542,7 +566,7 @@ export default function TransactionDetailsPage() {
                   )}
                 </button>
                 <button
-                  onClick={handleRejectTransaction}
+                  onClick={handleRejectClick}
                   disabled={!!actionLoading}
                   className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
@@ -579,7 +603,7 @@ export default function TransactionDetailsPage() {
               </svg>
             </button>
             <Image
-              src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/storage/${transaction.receiptImage}`}
+              src={`${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/storage/${transaction.receiptImage}`}
               alt="Payment Receipt - Full Size"
               width={800}
               height={1000}
@@ -588,6 +612,29 @@ export default function TransactionDetailsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={approveConfirmOpen}
+        onClose={() => setApproveConfirmOpen(false)}
+        onConfirm={handleApproveConfirm}
+        title="Approve Transaction"
+        message={transaction ? `Are you sure you want to approve this ${transaction.type.toLowerCase()}?` : ''}
+        confirmLabel="Approve"
+        cancelLabel="Cancel"
+        isLoading={actionLoading === 'approve'}
+      />
+
+      <ConfirmDialog
+        open={rejectConfirmOpen}
+        onClose={() => setRejectConfirmOpen(false)}
+        onConfirm={handleRejectConfirm}
+        title="Reject Transaction"
+        message={transaction ? `Are you sure you want to reject this ${transaction.type.toLowerCase()}?` : ''}
+        confirmLabel="Reject"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isLoading={actionLoading === 'reject'}
+      />
     </div>
   );
 }

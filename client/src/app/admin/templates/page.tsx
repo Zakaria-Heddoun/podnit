@@ -11,6 +11,9 @@ import {
 } from "@/components/ui/table";
 import Badge from "@/components/ui/badge/Badge";
 import { AdminRejectModal } from "@/components/admin/AdminRejectModal";
+import { getImageUrl, getApiUrl } from "@/lib/utils";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 // Template interface
 interface Template {
@@ -19,6 +22,7 @@ interface Template {
   description?: string;
   thumbnail_image?: string;
   design_config?: any;
+  calculated_price?: number;
   status: string;
   created_at: string;
   updated_at: string;
@@ -27,6 +31,7 @@ interface Template {
   };
   product?: {
     name: string;
+    base_price: string;
   };
 }
 
@@ -41,6 +46,12 @@ export default function AdminTemplates() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Approve / Delete confirmation dialogs
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [approveId, setApproveId] = useState<number | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -51,20 +62,20 @@ export default function AdminTemplates() {
   const fetchTemplates = async () => {
     try {
       setIsLoading(true);
-      const url = new URL(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/admin/templates`);
-      if (selectedStatus !== 'All') {
-        url.searchParams.append('status', selectedStatus);
-      }
+      const query = selectedStatus !== 'All' ? `?status=${encodeURIComponent(selectedStatus)}` : '';
 
-      const response = await fetch(url.toString(), {
+      const response = await fetch(`${getApiUrl()}/api/admin/templates${query}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Accept': 'application/json'
+        },
       });
 
       if (response.ok) {
         const data = await response.json();
-        setTemplates(data.data || []);
+        // Support paginator or legacy array
+        const list = Array.isArray(data.data) ? data.data : (data.data?.data || []);
+        setTemplates(list);
       }
     } catch (error) {
       console.error("Failed to fetch templates", error);
@@ -74,10 +85,20 @@ export default function AdminTemplates() {
   };
 
   const handleApprove = async (id: number) => {
-    if (!confirm("Are you sure you want to approve this template?")) return;
+    setApproveId(id);
+    setApproveConfirmOpen(true);
+  };
+
+  const handleApproveConfirm = async () => {
+    if (!approveId) return;
+    const id = approveId;
+    setApproveConfirmOpen(false);
+    setApproveId(null);
+    setIsProcessing(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/admin/templates/${id}/approve`, {
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/admin/templates/${id}/approve`;
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -87,21 +108,21 @@ export default function AdminTemplates() {
 
       if (response.ok) {
         setTemplates(prev => prev.map(t => t.id === id ? { ...t, status: 'APPROVED' } : t));
+        toast.success('Template approved successfully');
+      } else {
+        toast.error('Failed to approve template');
       }
     } catch (error) {
       console.error("Failed to approve template", error);
+      toast.error('Error approving template');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const openRejectModal = (id: number) => {
     setSelectedTemplateId(id);
     setRejectModalOpen(true);
-  };
-
-  const getImageUrl = (path: string | null) => {
-    if (!path) return undefined;
-    if (path.startsWith('http')) return path;
-    return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${path}`;
   };
 
   const parseDesignConfig = (config: any) => {
@@ -127,7 +148,8 @@ export default function AdminTemplates() {
     setIsProcessing(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/admin/templates/${selectedTemplateId}/reject`, {
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/admin/templates/${selectedTemplateId}/reject`;
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -140,20 +162,34 @@ export default function AdminTemplates() {
         setTemplates(prev => prev.map(t => t.id === selectedTemplateId ? { ...t, status: 'REJECTED' } : t));
         setRejectModalOpen(false);
         setSelectedTemplateId(null);
+        toast.success('Template rejected successfully');
+      } else {
+        toast.error('Failed to reject template');
       }
     } catch (error) {
       console.error("Failed to reject template", error);
+      toast.error('Error rejecting template');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleDelete = async (id: number, e: React.MouseEvent) => {
+  const handleDeleteClick = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this template? This will also delete all associated asset files.')) return;
+    setDeleteId(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteId) return;
+    const id = deleteId;
+    setDeleteConfirmOpen(false);
+    setDeleteId(null);
+    setIsProcessing(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/admin/templates/${id}`, {
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/admin/templates/${id}`;
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -162,30 +198,33 @@ export default function AdminTemplates() {
 
       if (response.ok) {
         setTemplates(prev => prev.filter(t => t.id !== id));
-        alert('Template and all associated files deleted successfully');
+        toast.success('Template and all associated files deleted successfully');
       } else {
-        alert('Failed to delete template');
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.message || 'Failed to delete template');
       }
     } catch (error) {
       console.error("Failed to delete template", error);
-      alert('Failed to delete template');
+      toast.error('Error deleting template');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // Filter templates based on search locally
-  const filteredTemplates = templates.filter(template =>
+  const filteredTemplates = Array.isArray(templates) ? templates.filter(template =>
     template.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (template.user?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ) : [];
 
   const statuses = ["All", "Pending", "Approved", "Rejected"];
 
   // Template statistics
   const stats = {
-    total: templates.length,
-    approved: templates.filter(t => t.status === "APPROVED").length,
-    pending: templates.filter(t => t.status === "PENDING").length,
-    rejected: templates.filter(t => t.status === "REJECTED").length,
+    total: Array.isArray(templates) ? templates.length : 0,
+    approved: Array.isArray(templates) ? templates.filter(t => t.status === "APPROVED").length : 0,
+    pending: Array.isArray(templates) ? templates.filter(t => t.status === "PENDING").length : 0,
+    rejected: Array.isArray(templates) ? templates.filter(t => t.status === "REJECTED").length : 0,
   };
 
   return (
@@ -276,6 +315,7 @@ export default function AdminTemplates() {
               <TableRow>
                 <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-xs dark:text-gray-400">Template</TableCell>
                 <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-xs dark:text-gray-400">User</TableCell>
+                <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-xs dark:text-gray-400">Price</TableCell>
                 <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-xs dark:text-gray-400">Status</TableCell>
                 <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-xs dark:text-gray-400">Date</TableCell>
                 <TableCell isHeader className="py-3 font-medium text-gray-500 text-end text-xs dark:text-gray-400">Actions</TableCell>
@@ -285,11 +325,11 @@ export default function AdminTemplates() {
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-gray-500">Loading...</TableCell>
+                  <TableCell colSpan={6} className="py-8 text-center text-gray-500">Loading...</TableCell>
                 </TableRow>
               ) : filteredTemplates.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-gray-500">No templates found.</TableCell>
+                  <TableCell colSpan={6} className="py-8 text-center text-gray-500">No templates found.</TableCell>
                 </TableRow>
               ) : (
                 filteredTemplates.map((template) => {
@@ -319,6 +359,13 @@ export default function AdminTemplates() {
                       </TableCell>
                       <TableCell className="py-4 text-sm text-gray-600 dark:text-gray-400">
                         {template.user?.name || 'Unknown'}
+                      </TableCell>
+                      <TableCell className="py-4">
+                        <div className="text-sm font-semibold text-gray-800 dark:text-white">
+                          {template.calculated_price ? `${parseFloat(String(template.calculated_price)).toFixed(2)} DH` : 
+                           template.product?.base_price ? `${parseFloat(template.product.base_price).toFixed(2)} DH` : 
+                           'N/A'}
+                        </div>
                       </TableCell>
                       <TableCell className="py-4">
                         <Badge
@@ -374,7 +421,7 @@ export default function AdminTemplates() {
                           
                           {/* Delete Button - Always visible for admin */}
                           <button
-                            onClick={(e) => handleDelete(template.id, e)}
+                            onClick={(e) => handleDeleteClick(template.id, e)}
                             className="rounded-lg bg-gray-50 p-2 text-gray-600 hover:bg-red-50 hover:text-red-600 dark:bg-gray-900/20 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-400"
                             title="Delete Template"
                           >
@@ -398,6 +445,29 @@ export default function AdminTemplates() {
         onClose={() => setRejectModalOpen(false)}
         onConfirm={handleRejectConfirm}
         isProcessing={isProcessing}
+      />
+
+      <ConfirmDialog
+        open={approveConfirmOpen}
+        onClose={() => { setApproveConfirmOpen(false); setApproveId(null); }}
+        onConfirm={handleApproveConfirm}
+        title="Approve Template"
+        message="Are you sure you want to approve this template?"
+        confirmLabel="Approve"
+        cancelLabel="Cancel"
+        isLoading={isProcessing}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteId(null); }}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Template"
+        message="Are you sure you want to delete this template? This will also delete all associated asset files."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isLoading={isProcessing}
       />
     </div>
   );

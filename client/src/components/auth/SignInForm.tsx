@@ -5,7 +5,7 @@ import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
 import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import React, { useState, useEffect } from "react";
 
@@ -18,6 +18,8 @@ export default function SignInForm() {
   const [loading, setLoading] = useState(false);
   const { login, isAuthenticated } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const successMessage = searchParams.get('message');
 
   // Check if user is already logged in on mount
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function SignInForm() {
         const userData = JSON.parse(user);
         let redirectUrl = '/dashboard';
         if (userData.role === 'admin') {
-          redirectUrl = '/admin/dashboard';
+          redirectUrl = '/admin';
         } else if (userData.role === 'seller') {
           redirectUrl = '/seller/dashboard';
         } else if (userData.role_id) {
@@ -48,7 +50,7 @@ export default function SignInForm() {
 
     try {
       const result = await login(email, password);
-      
+
       if (result.success) {
         // Use the redirect_url from the login response for role-based redirection
         const redirectUrl = result.redirect_url || '/dashboard';
@@ -56,7 +58,7 @@ export default function SignInForm() {
         window.location.href = redirectUrl;
       } else {
         setError(
-          result.error || 
+          result.error ||
           'Login failed. Please check your credentials.'
         );
       }
@@ -76,7 +78,7 @@ export default function SignInForm() {
           className="inline-flex items-center text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
         >
           <ChevronLeftIcon />
-          Back to dashboard
+          Back
         </Link>
       </div>
       <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
@@ -91,6 +93,11 @@ export default function SignInForm() {
           </div>
           <div>
             <form onSubmit={handleSubmit}>
+              {successMessage && (
+                <div className="mb-4 p-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded-lg dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
+                  {successMessage}
+                </div>
+              )}
               {error && (
                 <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
                   {error}
@@ -101,9 +108,9 @@ export default function SignInForm() {
                   <Label>
                     Email <span className="text-error-500">*</span>{" "}
                   </Label>
-                  <Input 
-                    placeholder="info@gmail.com" 
-                    type="email" 
+                  <Input
+                    placeholder="info@gmail.com"
+                    type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -141,16 +148,16 @@ export default function SignInForm() {
                     </span>
                   </div>
                   <Link
-                    href="/reset-password"
+                    href="/forgot-password"
                     className="text-sm text-gray-800 hover:text-black dark:text-white dark:hover:text-gray-200"
                   >
                     Forgot password?
                   </Link>
                 </div>
                 <div>
-                  <Button 
-                    className="w-full bg-gray-800 hover:bg-black dark:bg-white dark:text-gray-800 dark:hover:bg-gray-200" 
-                    size="sm" 
+                  <Button
+                    className="w-full bg-gray-800 hover:bg-black dark:bg-white dark:text-gray-800 dark:hover:bg-gray-200"
+                    size="sm"
                     type="submit"
                     disabled={loading}
                   >

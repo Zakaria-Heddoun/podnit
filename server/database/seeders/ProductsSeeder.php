@@ -32,6 +32,14 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['White', 'Black', 'Navy', 'Gray', 'Red', 'Blue', 'Green', 'Yellow']),
                 'available_sizes' => json_encode(['XS', 'S', 'M', 'L', 'XL', 'XXL']),
                 'image_url' => '/images/products/product-01.jpg',
+                'gallery' => json_encode([
+                    ['url' => '/images/products/product-01.jpg', 'color' => '#FFFFFF'], // White
+                    ['url' => '/images/products/product-03.jpg', 'color' => '#000000'], // Black
+                ]),
+                'mockups' => json_encode([
+                    'front' => '/images/products/product-01.jpg',
+                    'back' => '/images/products/product-01.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -44,6 +52,9 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['Black', 'White', 'Navy', 'Red', 'Green', 'Gray', 'Royal Blue']),
                 'available_sizes' => json_encode(['One Size']),
                 'image_url' => '/images/products/product-02.jpg',
+                'mockups' => json_encode([
+                    'front' => '/images/products/product-02.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -56,6 +67,10 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['Black', 'Gray', 'Navy', 'Maroon', 'Forest Green', 'White']),
                 'available_sizes' => json_encode(['S', 'M', 'L', 'XL', 'XXL']),
                 'image_url' => '/images/products/product-03.jpg',
+                'mockups' => json_encode([
+                    'front' => '/images/products/product-03.jpg',
+                    'back' => '/images/products/product-03.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -68,6 +83,9 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['Natural', 'Black', 'Navy', 'Red', 'Forest Green']),
                 'available_sizes' => json_encode(['Standard']),
                 'image_url' => '/images/products/product-04.jpg',
+                'mockups' => json_encode([
+                    'main' => '/images/products/product-04.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -80,6 +98,10 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['White', 'Black', 'Navy', 'Royal Blue', 'Red', 'Gray', 'Light Blue']),
                 'available_sizes' => json_encode(['S', 'M', 'L', 'XL', 'XXL']),
                 'image_url' => '/images/products/product-05.jpg',
+                'mockups' => json_encode([
+                    'front' => '/images/products/product-05.jpg',
+                    'back' => '/images/products/product-05.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -92,6 +114,9 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['White', 'Black', 'Blue', 'Red', 'Green']),
                 'available_sizes' => json_encode(['11oz']),
                 'image_url' => '/images/products/product-01.jpg',
+                'mockups' => json_encode([
+                    'main' => '/images/products/product-01.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -104,6 +129,10 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['Clear', 'Black', 'White']),
                 'available_sizes' => json_encode(['iPhone 15', 'iPhone 15 Pro', 'iPhone 14', 'Samsung Galaxy S24', 'Samsung Galaxy S23']),
                 'image_url' => '/images/products/product-02.jpg',
+                'mockups' => json_encode([
+                    'front' => '/images/products/product-02.jpg',
+                    'back' => '/images/products/product-02.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -116,6 +145,9 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['Standard Canvas']),
                 'available_sizes' => json_encode(['8x10"', '11x14"', '16x20"', '20x24"', '24x36"']),
                 'image_url' => '/images/products/product-03.jpg',
+                'mockups' => json_encode([
+                    'main' => '/images/products/product-03.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -128,6 +160,10 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['Black', 'Gray', 'Navy', 'Red', 'White', 'Forest Green']),
                 'available_sizes' => json_encode(['S', 'M', 'L', 'XL', 'XXL']),
                 'image_url' => '/images/products/product-04.jpg',
+                'mockups' => json_encode([
+                    'front' => '/images/products/product-04.jpg',
+                    'back' => '/images/products/product-04.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -140,6 +176,10 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['White', 'Linen', 'Black']),
                 'available_sizes' => json_encode(['16x16"', '18x18"', '20x20"']),
                 'image_url' => '/images/products/product-05.jpg',
+                'mockups' => json_encode([
+                    'front' => '/images/products/product-05.jpg',
+                    'back' => '/images/products/product-05.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -152,6 +192,9 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['Black', 'Gray', 'Navy', 'White']),
                 'available_sizes' => json_encode(['13"', '15"', '16"']),
                 'image_url' => '/images/products/product-01.jpg',
+                 'mockups' => json_encode([
+                    'front' => '/images/products/product-01.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()
@@ -164,6 +207,10 @@ class ProductsSeeder extends Seeder
                 'available_colors' => json_encode(['White', 'Black', 'Gray', 'Navy', 'Red', 'Yellow', 'Pink']),
                 'available_sizes' => json_encode(['XS', 'S', 'M', 'L', 'XL', 'XXL']),
                 'image_url' => '/images/products/product-02.jpg',
+                'mockups' => json_encode([
+                    'front' => '/images/products/product-02.jpg',
+                    'back' => '/images/products/product-02.jpg',
+                ]),
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now()

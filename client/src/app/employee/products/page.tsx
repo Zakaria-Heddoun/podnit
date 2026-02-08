@@ -36,12 +36,9 @@ export default function EmployeeProductsPage() {
     setError(null);
     
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       // Fetch only active products for employees - explicitly filter by is_active=true
       const url = `${API_URL}/api/admin/products?per_page=100&status=active`;
-      console.log('🔍 Fetching active products from:', url);
-      console.log('🔑 Using token:', token.substring(0, 20) + '...');
-      
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -51,11 +48,9 @@ export default function EmployeeProductsPage() {
         }
       });
 
-      console.log('📡 Response status:', response.status, response.statusText);
 
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Products API response:', result);
         
         // Handle different response structures
         let productsData: any[] = [];
@@ -71,21 +66,9 @@ export default function EmployeeProductsPage() {
         // Double filter to ensure only active products are shown
         productsData = productsData.filter((product: any) => {
           const isActive = product.is_active === true || product.is_active === 1;
-          console.log(`Product ${product.id} (${product.name}): is_active=${product.is_active}, filtered=${isActive}`);
           return isActive;
         });
         
-        // Log product IDs and details
-        const productIds = productsData.map(p => p.id);
-        console.log(`✅ Extracted ${productsData.length} active products`);
-        console.log(`📋 Product IDs: [${productIds.join(', ')}]`);
-        console.log(`📦 Product details:`, productsData.map(p => ({ 
-          id: p.id, 
-          name: p.name, 
-          is_active: p.is_active,
-          in_stock: p.in_stock,
-          price: p.base_price
-        })));
         
         setProducts(productsData);
         setError(null);
@@ -224,7 +207,7 @@ export default function EmployeeProductsPage() {
                     {product.image_url ? (
                       <img 
                         src={product.image_url.startsWith('/') 
-                          ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${product.image_url}`
+                          ? `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}${product.image_url}`
                           : product.image_url
                         }
                         alt={product.name}
@@ -253,7 +236,7 @@ export default function EmployeeProductsPage() {
                     Category: {product.category || 'Uncategorized'}
                   </p>
                   <p className="text-lg font-bold text-gray-900 dark:text-white mb-3">
-                    ${parseFloat(product.base_price || 0).toFixed(2)}
+                    {parseFloat(product.base_price || 0).toFixed(2)} DH
                   </p>
                   <div className="mt-2 flex items-center gap-2 flex-wrap">
                     <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">

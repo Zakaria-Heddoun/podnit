@@ -1,6 +1,9 @@
 "use client";
 
+import React, { useState } from "react";
 import DataTablesLibrary from "@/components/DataTables/DataTablesLibrary";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import DataTablesExport, { DataTablesExportItem } from "@/components/DataTables/DataTablesExport";
 import DataTablesHTML from "@/components/DataTables/DataTablesHTML";
 
@@ -118,7 +121,8 @@ const exportTableData = basicTableData.map(item => ({
 }));
 
 const DataTablesPage = () => {
-
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [selectedItemsForDelete, setSelectedItemsForDelete] = useState<DataTablesExportItem[]>([]);
 
   const handleSelectionChange = (selectedItems: DataTablesExportItem[]) => {
     console.log('Selected items:', selectedItems);
@@ -127,10 +131,16 @@ const DataTablesPage = () => {
   const handleBulkAction = (action: string, selectedItems: DataTablesExportItem[]) => {
     console.log(`Bulk ${action} for:`, selectedItems);
     if (action === 'delete') {
-      if (confirm(`Are you sure you want to delete ${selectedItems.length} items?`)) {
-        alert(`Bulk deleted ${selectedItems.length} items`);
-      }
+      setSelectedItemsForDelete(selectedItems);
+      setDeleteConfirmOpen(true);
     }
+  };
+
+  const handleDeleteConfirm = () => {
+    const count = selectedItemsForDelete.length;
+    setDeleteConfirmOpen(false);
+    setSelectedItemsForDelete([]);
+    toast.success(`Bulk deleted ${count} items`);
   };
 
   return (
@@ -167,6 +177,17 @@ const DataTablesPage = () => {
           onBulkAction={handleBulkAction}
         />
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setSelectedItemsForDelete([]); }}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Items"
+        message={`Are you sure you want to delete ${selectedItemsForDelete.length} items?`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+      />
     </div>
   );
 };

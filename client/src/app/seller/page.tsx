@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import MonthlySalesChart from "@/components/ecommerce/MonthlySalesChart";
 import { BoxIconLine, GroupIcon, DollarLineIcon, TimeIcon } from "@/icons";
+import { extractList } from "@/lib/extractList";
+import { getApiUrl } from "@/lib/utils";
 
 type Order = {
   id: number;
@@ -23,7 +25,7 @@ type Template = {
 };
 
 export default function SellerDashboard() {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const API_URL = getApiUrl();
 
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -52,7 +54,7 @@ export default function SellerDashboard() {
         });
         if (!res.ok) return;
         const data = await res.json();
-        const list = data?.data?.data || data?.data || [];
+        const list = extractList(data);
         setOrders(list);
         const uniqueCustomers = new Set(
           list
@@ -88,14 +90,12 @@ export default function SellerDashboard() {
         });
         if (!res.ok) return;
         const data = await res.json();
-        const list = data?.data || [];
+        const list = extractList(data);
         setTemplates(list);
         setMetrics((prev) => ({
           ...prev,
-          pendingTemplates: list.filter((t: any) => t.status === "PENDING")
-            .length,
-          approvedTemplates: list.filter((t: any) => t.status === "APPROVED")
-            .length,
+          pendingTemplates: Array.isArray(list) ? list.filter((t: any) => t.status === "PENDING").length : 0,
+          approvedTemplates: Array.isArray(list) ? list.filter((t: any) => t.status === "APPROVED").length : 0,
         }));
       } catch (err) {
         console.error("Failed to load templates", err);
@@ -104,15 +104,16 @@ export default function SellerDashboard() {
 
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/profile`, {
+        const response = await fetch(`${API_URL}/api/user`, {
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
           },
         });
-        if (!res.ok) return;
-        const data = await res.json();
-        setBalance(Number(data?.data?.balance || 0));
+        if (!response.ok) return;
+        const data = await response.json();
+        const balanceValue = (data?.data?.balance ?? data?.balance) || 0;
+        setBalance(Number(balanceValue));
       } catch (err) {
         console.error("Failed to load profile", err);
       }
@@ -123,7 +124,7 @@ export default function SellerDashboard() {
     );
   }, [API_URL]);
 
-  const currency = (v: number) => `${v.toFixed(2)} MAD`;
+  const currency = (v: number) => `${v.toFixed(2)} DH`;
 
   return (
     <div className="space-y-6">

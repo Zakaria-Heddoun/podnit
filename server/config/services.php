@@ -37,6 +37,7 @@ return [
 
     'elitespeed' => [
         'token' => env('ELITESPEED_API_TOKEN'),
+        'webhook_token' => env('ELITESPEED_WEBHOOK_TOKEN'), // Optional: for webhook verification
     ],
 
 ];

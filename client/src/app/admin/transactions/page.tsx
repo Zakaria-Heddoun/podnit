@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/table";
 import Badge from "@/components/ui/badge/Badge";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 // Transaction interface for unified deposits and withdrawals
 interface Transaction {
@@ -92,6 +94,10 @@ export default function AdminTransactions() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
   const [selectedType, setSelectedType] = useState<string>("All");
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [approveTransaction, setApproveTransaction] = useState<Transaction | null>(null);
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false);
+  const [rejectTransaction, setRejectTransaction] = useState<Transaction | null>(null);
   const [selectedPaymentMethod] = useState<string>("All");
   const [dateFilter, setDateFilter] = useState<string>("All");
 
@@ -103,10 +109,9 @@ export default function AdminTransactions() {
   const transformDeposit = (deposit: DepositResponse): Transaction => {
     // Ensure amount is properly converted to number
     const amount = typeof deposit.amount === 'string' ? parseFloat(deposit.amount) : deposit.amount;
-    console.log('Deposit transformation - raw amount:', deposit.amount, 'converted:', amount); // Debug log
 
     const transactionId = `DEP-${deposit.id.toString().padStart(6, '0')}`;
-    console.log('Generated deposit transaction ID:', transactionId, 'for deposit ID:', deposit.id); // Debug log
+
 
     return {
       id: deposit.id,
@@ -132,10 +137,9 @@ export default function AdminTransactions() {
     // Ensure amount is properly converted to number
     const amount = typeof withdrawal.amount === 'string' ? parseFloat(withdrawal.amount) : withdrawal.amount;
     const fee = typeof withdrawal.fee === 'string' ? parseFloat(withdrawal.fee) : withdrawal.fee;
-    console.log('Withdrawal transformation - raw amount:', withdrawal.amount, 'converted:', amount); // Debug log
 
     const transactionId = `WITH-${withdrawal.id.toString().padStart(6, '0')}`;
-    console.log('Generated withdrawal transaction ID:', transactionId, 'for withdrawal ID:', withdrawal.id); // Debug log
+
 
     return {
       id: withdrawal.id,
@@ -165,7 +169,7 @@ export default function AdminTransactions() {
       }
 
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
 
         // Fetch deposits and withdrawals simultaneously
         const [depositsResponse, withdrawalsResponse] = await Promise.all([
@@ -188,7 +192,6 @@ export default function AdminTransactions() {
         // Process deposits
         if (depositsResponse.ok) {
           const depositsResult = await depositsResponse.json();
-          console.log('Raw deposits response:', depositsResult); // Debug log
           if (depositsResult.success && depositsResult.data) {
             const depositsData = Array.isArray(depositsResult.data.data)
               ? depositsResult.data.data
@@ -196,9 +199,7 @@ export default function AdminTransactions() {
                 ? depositsResult.data
                 : [];
 
-            console.log('Deposits data:', depositsData); // Debug log
             const depositTransactions = depositsData.map(transformDeposit);
-            console.log('Transformed deposits:', depositTransactions); // Debug log
             allTransactions.push(...depositTransactions);
           }
         }
@@ -237,22 +238,33 @@ export default function AdminTransactions() {
 
   // Handle viewing transaction details
   const handleViewTransaction = (transaction: Transaction) => {
-    console.log('Viewing transaction:', transaction); // Debug log
-    console.log('Navigating to:', `/admin/transactions/${transaction.transactionId}`); // Debug log
     router.push(`/admin/transactions/${transaction.transactionId}`);
   };
 
   // Handle transaction actions
-  const handleApproveTransaction = async (transaction: Transaction) => {
-    if (!token) return;
+  const handleApproveClick = (transaction: Transaction) => {
+    if (!token) {
+      toast.error('Authentication required');
+      return;
+    }
+    setApproveTransaction(transaction);
+    setApproveConfirmOpen(true);
+  };
+
+  const handleApproveConfirm = async () => {
+    const transaction = approveTransaction;
+    if (!transaction || !token) return;
+    setApproveConfirmOpen(false);
+    setApproveTransaction(null);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       const endpoint = transaction.type === 'Deposit'
         ? `${API_URL}/api/admin/deposits/${transaction.id}`
         : `${API_URL}/api/admin/withdrawals/${transaction.id}`;
 
       const status = transaction.type === 'Deposit' ? 'VALIDATED' : 'PROCESSED';
+
 
       const response = await fetch(endpoint, {
         method: 'PUT',
@@ -267,23 +279,43 @@ export default function AdminTransactions() {
         })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
+        toast.success('Transaction approved successfully!');
         // Refresh transactions
         window.location.reload();
+      } else {
+        console.error('Failed to approve:', data);
+        toast.error(`Failed to approve transaction: ${data.message || data.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error approving transaction:', error);
+      toast.error('An error occurred while approving the transaction');
     }
   };
 
-  const handleRejectTransaction = async (transaction: Transaction) => {
-    if (!token) return;
+  const handleRejectClick = (transaction: Transaction) => {
+    if (!token) {
+      toast.error('Authentication required');
+      return;
+    }
+    setRejectTransaction(transaction);
+    setRejectConfirmOpen(true);
+  };
+
+  const handleRejectConfirm = async () => {
+    const transaction = rejectTransaction;
+    if (!transaction || !token) return;
+    setRejectConfirmOpen(false);
+    setRejectTransaction(null);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
       const endpoint = transaction.type === 'Deposit'
         ? `${API_URL}/api/admin/deposits/${transaction.id}`
         : `${API_URL}/api/admin/withdrawals/${transaction.id}`;
+
 
       const response = await fetch(endpoint, {
         method: 'PUT',
@@ -304,6 +336,7 @@ export default function AdminTransactions() {
       }
     } catch (error) {
       console.error('Error rejecting transaction:', error);
+      toast.error('An error occurred while rejecting the transaction');
     }
   };
 
@@ -747,7 +780,7 @@ export default function AdminTransactions() {
                           <button
                             className="rounded-lg bg-green-50 p-2 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30"
                             title="Approve Transaction"
-                            onClick={() => handleApproveTransaction(transaction)}
+                            onClick={() => handleApproveClick(transaction)}
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -756,7 +789,7 @@ export default function AdminTransactions() {
                           <button
                             className="rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
                             title="Reject Transaction"
-                            onClick={() => handleRejectTransaction(transaction)}
+                            onClick={() => handleRejectClick(transaction)}
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -783,6 +816,27 @@ export default function AdminTransactions() {
           </Table>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={approveConfirmOpen}
+        onClose={() => { setApproveConfirmOpen(false); setApproveTransaction(null); }}
+        onConfirm={handleApproveConfirm}
+        title="Approve Transaction"
+        message={approveTransaction ? `Are you sure you want to approve this ${approveTransaction.type.toLowerCase()}?` : ''}
+        confirmLabel="Approve"
+        cancelLabel="Cancel"
+      />
+
+      <ConfirmDialog
+        open={rejectConfirmOpen}
+        onClose={() => { setRejectConfirmOpen(false); setRejectTransaction(null); }}
+        onConfirm={handleRejectConfirm}
+        title="Reject Transaction"
+        message={rejectTransaction ? `Are you sure you want to reject this ${rejectTransaction.type.toLowerCase()}?` : ''}
+        confirmLabel="Reject"
+        cancelLabel="Cancel"
+        variant="destructive"
+      />
     </div>
   );
 }

@@ -21,10 +21,16 @@ return [
 
     // Include common dev frontend origins (add more if you use different ports)
     'allowed_origins' => [
+        // Local Next dev server
         'http://localhost:3000',
         'http://127.0.0.1:3000',
-        'http://localhost:3001',
-        'http://127.0.0.1:3001',
+        'http://localhost:30000',
+        'http://127.0.0.1:30000',
+        'http://podnit.com',
+        'https://podnit.com',
+        'http://www.podnit.com',
+        'https://www.podnit.com',
+        'http://127.0.0.1:30001',
         env('FRONTEND_URL'),
     ],
 

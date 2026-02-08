@@ -43,10 +43,7 @@ export function TemplateDesignViewer({ isOpen, onClose, template }: TemplateDesi
     }, [isOpen, template?.id]);
 
     const loadDesigns = async () => {
-        alert(`Template ID: ${template?.id}\nHas design_config: ${!!template?.design_config}\nType: ${typeof template?.design_config}`);
-
         if (!template?.design_config) {
-            console.log('No design_config found:', template);
             return;
         }
 
@@ -55,8 +52,6 @@ export function TemplateDesignViewer({ isOpen, onClose, template }: TemplateDesi
             const config = typeof template.design_config === 'string'
                 ? JSON.parse(template.design_config)
                 : template.design_config;
-
-            console.log('Parsed config:', config);
 
             const sides: DesignSide[] = [
                 { name: 'Big Front', key: 'big-front', canvas: null },

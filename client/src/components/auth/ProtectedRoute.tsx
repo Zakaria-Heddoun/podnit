@@ -2,22 +2,28 @@
 
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: 'admin' | 'seller' | 'employee';
+  requiredRole?: 'admin' | 'seller' | 'employee' | ('admin' | 'seller' | 'employee')[];
   redirectTo?: string;
 }
 
-export default function ProtectedRoute({ 
-  children, 
-  requiredRole, 
-  redirectTo = '/signin' 
+export default function ProtectedRoute({
+  children,
+  requiredRole,
+  redirectTo = '/signin'
 }: ProtectedRouteProps) {
   const { isAuthenticated, user, loading, isAdmin, isSeller, isEmployee } = useAuth();
   const router = useRouter();
   const [hasRedirected, setHasRedirected] = useState(false);
+
+  // Stabilize requiredRole array to avoid effect loops
+  const roles = useMemo(() => {
+    if (!requiredRole) return [];
+    return Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+  }, [JSON.stringify(requiredRole)]);
 
   useEffect(() => {
     if (!loading && !hasRedirected) {
@@ -27,22 +33,19 @@ export default function ProtectedRoute({
         if (currentPath !== '/signin' && currentPath !== '/signup') {
           localStorage.setItem('redirect_url', currentPath);
         }
-        
+
         // User is not authenticated, redirect to signin
         setHasRedirected(true);
         router.push(redirectTo);
         return;
       }
 
-      if (requiredRole) {
+      if (roles.length > 0) {
         let hasRequiredRole = false;
-        if (requiredRole === 'admin' && isAdmin) {
-          hasRequiredRole = true;
-        } else if (requiredRole === 'seller' && isSeller) {
-          hasRequiredRole = true;
-        } else if (requiredRole === 'employee' && isEmployee) {
-          hasRequiredRole = true;
-        }
+
+        if (roles.includes('admin') && isAdmin) hasRequiredRole = true;
+        if (roles.includes('seller') && isSeller) hasRequiredRole = true;
+        if (roles.includes('employee') && isEmployee) hasRequiredRole = true;
 
         if (!hasRequiredRole) {
           // User doesn't have the required role
@@ -52,7 +55,7 @@ export default function ProtectedRoute({
           } else if (isSeller) {
             router.push('/seller');
           } else if (isEmployee) {
-            router.push('/employee/dashboard');
+            router.push('/admin'); // Employees now share admin routes
           } else {
             router.push('/signin');
           }
@@ -60,7 +63,7 @@ export default function ProtectedRoute({
         }
       }
     }
-  }, [isAuthenticated, user, loading, requiredRole, router, redirectTo, hasRedirected, isAdmin, isSeller, isEmployee]);
+  }, [isAuthenticated, user, loading, roles, router, redirectTo, hasRedirected, isAdmin, isSeller, isEmployee]);
 
   // Show loading spinner while checking authentication
   if (loading) {
@@ -74,13 +77,11 @@ export default function ProtectedRoute({
   // Check if user has required role
   let hasRequiredRole = true;
   if (requiredRole) {
-    if (requiredRole === 'admin') {
-      hasRequiredRole = isAdmin;
-    } else if (requiredRole === 'seller') {
-      hasRequiredRole = isSeller;
-    } else if (requiredRole === 'employee') {
-      hasRequiredRole = isEmployee;
-    }
+    const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    hasRequiredRole = false;
+    if (roles.includes('admin') && isAdmin) hasRequiredRole = true;
+    if (roles.includes('seller') && isSeller) hasRequiredRole = true;
+    if (roles.includes('employee') && isEmployee) hasRequiredRole = true;
   }
 
   // Don't render children if not authenticated or wrong role

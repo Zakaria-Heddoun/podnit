@@ -21,6 +21,11 @@ class UserController extends Controller
             $user->load('roleRelation');
         }
         
+        // Ensure seller has a referral code
+        if ($user->isSeller()) {
+            $user->ensureReferralCode();
+        }
+        
         // Get permissions if user has a role
         $permissions = [];
         if ($user->roleRelation) {
@@ -38,6 +43,7 @@ class UserController extends Controller
                 'phone' => $user->phone,
                 'brand_name' => $user->brand_name,
                 'cin' => $user->cin,
+                'account_holder' => $user->account_holder,
                 'bank_name' => $user->bank_name,
                 'rib' => $user->rib,
                 'balance' => $user->balance,
@@ -59,10 +65,9 @@ class UserController extends Controller
     {
         $user = auth()->user();
 
-        // Base validation rules
+        // Base validation rules (email is not editable)
         $rules = [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|max:20',
         ];
 
@@ -71,20 +76,19 @@ class UserController extends Controller
             $rules = array_merge($rules, [
                 'brand_name' => 'nullable|string|max:255',
                 'cin' => 'nullable|string|max:20',
-                'bank_name' => 'nullable|string|max:100',
-                'rib' => 'nullable|string|max:30',
+                // bank_name, account_holder, and RIB are not editable after being set
             ]);
         }
 
         $request->validate($rules);
 
-        // Fields allowed for all users
-        $allowedFields = ['name', 'email', 'phone'];
+        // Fields allowed for all users (email is not editable)
+        $allowedFields = ['name', 'phone'];
 
-        // Add seller-specific fields
+        // Add seller-specific fields (bank_name, account_holder, and RIB are not editable after being set)
         if ($user->role === 'seller') {
             $allowedFields = array_merge($allowedFields, [
-                'brand_name', 'cin', 'bank_name', 'rib'
+                'brand_name', 'cin'
             ]);
         }
 
@@ -154,7 +158,7 @@ class UserController extends Controller
         // Determine redirect URL based on role
         $redirectUrl = '/dashboard';
         if ($user->isAdmin()) {
-            $redirectUrl = '/admin/dashboard';
+            $redirectUrl = '/admin';
         } elseif ($user->isSeller()) {
             $redirectUrl = '/seller/dashboard';
         } elseif ($user->role_id) {

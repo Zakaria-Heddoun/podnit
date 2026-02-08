@@ -11,3 +11,4 @@ export default function EditProductPage() {
 
   return <ProductForm mode="edit" productId={productId} />;
 }
+

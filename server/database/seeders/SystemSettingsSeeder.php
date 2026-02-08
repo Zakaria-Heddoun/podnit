@@ -46,6 +46,10 @@ class SystemSettingsSeeder extends Seeder
             ['setting_key' => 'packaging_price', 'setting_value' => '5.00', 'description' => 'Default price for packaging'],
             ['setting_key' => 'shipping_casablanca', 'setting_value' => '20.00', 'description' => 'Shipping price for Casablanca'],
             ['setting_key' => 'shipping_other', 'setting_value' => '40.00', 'description' => 'Shipping price for cities other than Casablanca'],
+            ['setting_key' => 'delivery_price', 'setting_value' => '0', 'description' => 'General delivery price'],
+            ['setting_key' => 'site_name', 'setting_value' => 'PODNIT', 'description' => 'Name of the website'],
+            ['setting_key' => 'site_url', 'setting_value' => 'https://podnit.com', 'description' => 'Primary website URL'],
+            ['setting_key' => 'site_description', 'setting_value' => 'High-quality print-on-demand products delivered to your door.', 'description' => 'Website description for SEO and metadata'],
         ];
 
         foreach ($settings as $setting) {

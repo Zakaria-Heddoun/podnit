@@ -21,8 +21,8 @@ return new class extends Migration
             // Drop columns
             $table->dropColumn(['seller_id', 'price', 'sizes']);
 
-            // Add new column
-            $table->foreignId('user_id')->after('id')->constrained('users')->onDelete('cascade');
+            // Add new column (nullable for SQLite / test compatibility)
+            $table->foreignId('user_id')->nullable()->after('id')->constrained('users')->onDelete('cascade');
         });
     }
 

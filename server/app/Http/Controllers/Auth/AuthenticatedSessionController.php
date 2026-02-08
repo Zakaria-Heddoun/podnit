@@ -30,7 +30,7 @@ class AuthenticatedSessionController extends Controller
         // Determine redirect URL based on role
         $redirectUrl = '/dashboard';
         if ($user->isAdmin()) {
-            $redirectUrl = '/admin/dashboard';
+            $redirectUrl = '/admin';
         } elseif ($user->isSeller()) {
             $redirectUrl = '/seller/dashboard';
         } elseif ($user->role_id) {

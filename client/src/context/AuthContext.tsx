@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { getApiUrl } from '@/lib/utils';
 
 interface User {
   id: number;
@@ -15,6 +16,7 @@ interface User {
   brand_name?: string;
   // Seller-specific fields
   cin?: string;
+  account_holder?: string;
   bank_name?: string;
   rib?: string;
   balance?: number;
@@ -38,13 +40,14 @@ interface AuthContextType {
   isAdmin: boolean;
   isSeller: boolean;
   isEmployee: boolean;
+  isVerified: boolean;
   hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_BASE_URL = '/api';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = getApiUrl();
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -113,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/signin`, {
+      const response = await fetch(`${API_URL}/api/signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -134,7 +137,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(authToken);
         setUser(userData);
 
-        return { success: true, redirect_url };
+        let finalRedirect = redirect_url;
+        if (userData.role_id && userData.role !== 'admin' && userData.role !== 'seller') {
+          finalRedirect = '/admin';
+        }
+
+        return { success: true, redirect_url: finalRedirect };
       } else {
         return {
           success: false,
@@ -162,7 +170,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = user?.role === 'admin';
   const isSeller = user?.role === 'seller';
   const isEmployee = !!user?.role_id && user?.role !== 'admin' && user?.role !== 'seller';
-  
+  const isVerified = user?.is_verified ?? false;
+
   // Check if user has a specific permission
   const hasPermission = (permission: string): boolean => {
     if (isAdmin) return true; // Admins have all permissions
@@ -183,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin,
     isSeller,
     isEmployee,
+    isVerified,
     hasPermission,
   };
 

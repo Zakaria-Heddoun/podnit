@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import PermissionGuard from "@/components/auth/PermissionGuard";
+import { extractList } from "@/lib/extractList";
 import MonthlySalesChart from "@/components/ecommerce/MonthlySalesChart";
 import { BoxIconLine, GroupIcon, DollarLineIcon, TimeIcon } from "@/icons";
 
@@ -24,7 +27,7 @@ type Template = {
 type Product = { id: number; name: string; base_price?: number };
 
 export default function AdminDashboard() {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
 
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -54,7 +57,7 @@ export default function AdminDashboard() {
         });
         if (!res.ok) return;
         const data = await res.json();
-        const list = data?.data?.data || data?.data || [];
+        const list = extractList(data);
         setOrders(list);
         const uniqueCustomers = new Set(
           list
@@ -86,7 +89,7 @@ export default function AdminDashboard() {
         });
         if (!res.ok) return;
         const data = await res.json();
-        const list = data?.data || [];
+        const list = extractList(data);
         setTemplates(list);
         setMetrics((prev) => ({
           ...prev,
@@ -110,7 +113,7 @@ export default function AdminDashboard() {
         });
         if (!res.ok) return;
         const data = await res.json();
-        const list = data?.data?.data || data?.data || [];
+        const list = extractList(data);
         setProducts(list);
         setMetrics((prev) => ({
           ...prev,
@@ -128,8 +131,23 @@ export default function AdminDashboard() {
 
   const currency = (v: number) => `${v.toFixed(2)} DH`;
 
+  const accessDeniedFallback = (
+    <div className="p-6">
+      <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-sm text-center">
+        <h1 className="text-2xl font-semibold mb-2 text-gray-900 dark:text-white">Access Denied</h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          You don't have permission to view the dashboard. Contact your administrator to grant you access.
+        </p>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
+    <PermissionGuard 
+      requiredPermissions="view_dashboard"
+      fallback={accessDeniedFallback}
+    >
+      <div className="space-y-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
           Dashboard
@@ -222,6 +240,7 @@ export default function AdminDashboard() {
         </div>
       </div>
     </div>
+    </PermissionGuard>
   );
 }
 

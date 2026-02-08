@@ -30,7 +30,7 @@ const products = [
 
 export default function ProductCatalog() {
   return (
-    <section className="py-20 bg-muted/30">
+    <section id="products" className="py-20 bg-muted/30">
       <div className="container mx-auto px-4">
         <AnimatedGroup preset="hero-blur">
           <div className="text-center mb-8">

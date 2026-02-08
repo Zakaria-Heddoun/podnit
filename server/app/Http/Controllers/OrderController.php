@@ -18,16 +18,35 @@ use App\Services\EliteSpeedService;
 class OrderController extends Controller
 {
     /**
-     * Display all orders for admin
+     * Display all orders for admin or authorized employees
      */
     public function adminIndex(Request $request): JsonResponse
     {
+        $user = auth()->user();
+
+        // Check permission: admin has full access, employees need view_orders permission
+        if (!$user->isAdmin() && !$user->hasPermission('view_orders')) {
+            return response()->json([
+                'error' => 'Access denied. You do not have permission to view orders.'
+            ], 403);
+        }
+
         $query = Order::with(['user', 'product', 'template', 'customer'])
             ->orderBy('created_at', 'desc');
 
         // Filter by status if provided
         if ($request->has('status') && $request->status !== 'All') {
             $query->where('status', $request->status);
+        }
+
+        // Filter by returns if requested
+        if ($request->get('filter') === 'returns') {
+            $query->where(function($q) {
+                foreach (Order::RETURN_STATUSES as $status) {
+                    $q->orWhere('status', 'like', "%{$status}%")
+                      ->orWhere('shipping_status', 'like', "%{$status}%");
+                }
+            });
         }
 
         // Search functionality
@@ -49,11 +68,21 @@ class OrderController extends Controller
     }
 
     /**
-     * Show specific order details for admin
+     * Show specific order details for admin or authorized employees
      */
     public function adminShow(Order $order): JsonResponse
     {
+        $user = auth()->user();
+
+        // Check permission: admin has full access, employees need view_orders permission
+        if (!$user->isAdmin() && !$user->hasPermission('view_orders')) {
+            return response()->json([
+                'error' => 'Access denied. You do not have permission to view orders.'
+            ], 403);
+        }
+
         $order->load(['product', 'template', 'customer', 'user']);
+        $order = $this->enrichOrderItems($order);
         
         return response()->json([
             'success' => true,
@@ -81,6 +110,16 @@ class OrderController extends Controller
         // Filter by status if provided
         if ($request->has('status')) {
             $query->where('status', $request->status);
+        }
+
+        // Filter by returns if requested
+        if ($request->get('filter') === 'returns') {
+            $query->where(function($q) {
+                foreach (Order::RETURN_STATUSES as $status) {
+                    $q->orWhere('status', 'like', "%{$status}%")
+                      ->orWhere('shipping_status', 'like', "%{$status}%");
+                }
+            });
         }
 
         // Search functionality
@@ -116,14 +155,7 @@ class OrderController extends Controller
         }
 
         $order->load(['product', 'template', 'customer']);
-        
-        // Debug: Log the order data to see what's being returned
-        Log::info('Order data for ID ' . $order->id, [
-            'order_id' => $order->id,
-            'customer_id' => $order->customer_id,
-            'customer_data' => $order->customer ? $order->customer->toArray() : 'NO CUSTOMER FOUND',
-            'product_data' => $order->product ? $order->product->name : 'NO PRODUCT FOUND'
-        ]);
+        $order = $this->enrichOrderItems($order);
 
         return response()->json([
             'message' => 'Order details retrieved successfully',
@@ -132,26 +164,41 @@ class OrderController extends Controller
     }
 
     /**
+     * Get seller-specific price for a product or default base price
+     */
+    private function getSellerPrice($userId, $productId, $defaultPrice)
+    {
+        $sellerPrice = DB::table('seller_product_prices')
+            ->where('user_id', $userId)
+            ->where('product_id', $productId)
+            ->value('price');
+        
+        return $sellerPrice ?? $defaultPrice;
+    }
+
+    /**
      * Create a new order from a product (simple order)
      */
-    public function createFromProduct(Request $request): JsonResponse
+    public function createFromProduct(Request $request, EliteSpeedService $shippingService): JsonResponse
     {
-        Log::info('=== ORDER CREATION DEBUG START ===');
-        Log::info('Request data:', $request->all());
-        
         $validator = Validator::make($request->all(), [
-            'product_id' => 'required|exists:products,id',
+            'product_id' => 'nullable|exists:products,id', // Made optional - can be per-item
             'customer_name' => 'required|string|max:255',
-            'customer_email' => 'required|email|max:255',
+            'customer_email' => 'nullable|email|max:255',
             'customer_phone' => 'required|string|max:20',
+            'total_price' => 'required|numeric|min:0', // Total COD price for EliteSpeed
             'quantity' => 'required|integer|min:1',
             'selling_price' => 'required|numeric|min:0',
-            'selected_color' => 'required|string',
-            'selected_size' => 'required|string',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'nullable|exists:products,id', // Allow per-item product
+            'items.*.color' => 'required|string',
+            'items.*.size' => 'required|string',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.reorder_from_order_id' => 'nullable|exists:orders,id',
             'shipping_address' => 'required|array',
             'shipping_address.street' => 'required|string|max:255',
             'shipping_address.city' => 'required|string|max:100',
-            'shipping_address.postal_code' => 'required|string|max:20',
+            'shipping_address.postal_code' => 'nullable|string|max:20',
         ]);
 
         if ($validator->fails()) {
@@ -161,58 +208,102 @@ class OrderController extends Controller
                 'details' => $validator->errors()
             ], 422);
         }
-        Log::info('Validation passed');
 
         $user = auth()->user();
-        Log::info('Current user:', ['id' => $user->id, 'role' => $user->role, 'email' => $user->email]);
 
         if (!$user->isSeller()) {
-            Log::error('Access denied - user is not a seller');
             return response()->json([
                 'error' => 'Access denied. Seller account required.'
             ], 403);
         }
-        Log::info('User is seller - access granted');
 
-        $product = Product::find($request->product_id);
-        Log::info('Product found:', ['id' => $product->id, 'name' => $product->name, 'available_colors' => $product->available_colors, 'available_sizes' => $product->available_sizes]);
+        // Get the main product if specified, otherwise use first item's product
+        $mainProductId = $request->product_id ?? $request->items[0]['product_id'] ?? null;
+        if (!$mainProductId) {
+            return response()->json([
+                'error' => 'No product specified for order'
+            ], 422);
+        }
         
-        // Validate color and size options
-        if (!in_array($request->selected_color, $product->available_colors)) {
-            Log::error('Invalid color selection:', ['requested' => $request->selected_color, 'available' => $product->available_colors]);
-            return response()->json([
-                'error' => 'Invalid color selection'
-            ], 422);
-        }
-        Log::info('Color validation passed');
+        $mainProduct = Product::find($mainProductId);
+        
+        // Validate each item's product, color, and size
+        $totalProductCost = 0;
+        foreach ($request->items as $index => $item) {
+            // Use item's specific product_id or fall back to main product
+            $itemProductId = $item['product_id'] ?? $mainProductId;
+            $itemProduct = Product::find($itemProductId);
+            
+            if (!$itemProduct) {
+                return response()->json([
+                    'error' => "Product not found for item #" . ($index + 1)
+                ], 422);
+            }
+            
+            if (!in_array($item['color'], $itemProduct->available_colors)) {
+                Log::error('Invalid color selection:', ['item_index' => $index, 'requested' => $item['color'], 'available' => $itemProduct->available_colors]);
+                return response()->json([
+                    'error' => "Invalid color selection for item #" . ($index + 1)
+                ], 422);
+            }
 
-        if (!in_array($request->selected_size, $product->available_sizes)) {
-            Log::error('Invalid size selection:', ['requested' => $request->selected_size, 'available' => $product->available_sizes]);
-            return response()->json([
-                'error' => 'Invalid size selection'
-            ], 422);
+            if (!in_array($item['size'], $itemProduct->available_sizes)) {
+                Log::error('Invalid size selection:', ['item_index' => $index, 'requested' => $item['size'], 'available' => $itemProduct->available_sizes]);
+                return response()->json([
+                    'error' => "Invalid size selection for item #" . ($index + 1)
+                ], 422);
+            }
+            
+            // Calculate cost for this item
+            $reorderId = $item['reorder_from_order_id'] ?? null;
+            if ($reorderId) {
+                // Reorder logic: verify ownership and status
+                $originalOrder = Order::find($reorderId);
+                
+                if (!$originalOrder || $originalOrder->user_id !== $user->id) {
+                    return response()->json([
+                        'error' => "Invalid reorder source for item #" . ($index + 1)
+                    ], 422);
+                }
+                
+                if ($originalOrder->is_reordered) {
+                    return response()->json([
+                        'error' => "This return has already been reordered for item #" . ($index + 1)
+                    ], 422);
+                }
+                
+                // No base cost added for reorders
+            } else {
+                // Get seller-specific price or default base price
+                $itemPrice = $this->getSellerPrice($user->id, $itemProduct->id, $itemProduct->base_price);
+                $totalProductCost += $itemPrice * $item['quantity'];
+            }
         }
-        Log::info('Size validation passed');
 
         // Calculate total using selling price instead of base price
-        $unitPrice = $product->base_price; // This is what seller pays
         $sellingPrice = $request->selling_price; // This is what seller charges customer
         $totalAmount = $sellingPrice * $request->quantity;
-        Log::info('Price calculated:', [
-            'base_price' => $unitPrice, 'selling_price' => $sellingPrice, 
-            'quantity' => $request->quantity, 
-            'total_amount' => $totalAmount
-        ]);
+
+        // Check if user account is verified (activated)
+        if (!$user->is_verified) {
+            Log::warning('Unverified user attempted to create order:', [
+                'user_id' => $user->id,
+                'user_email' => $user->email
+            ]);
+            return response()->json([
+                'error' => 'Account not activated',
+                'message' => 'Your account is not activated yet. Please make your first deposit to activate your account and start placing orders.'
+            ], 403);
+        }
 
         // Check if user has sufficient balance (product cost + packaging + shipping)
-        $productCost = $unitPrice * $request->quantity;
+        $totalCost = $totalProductCost;
         
-        // Add packaging cost if applicable
-        $totalCost = $productCost;
+        // Add packaging cost if applicable (flat rate for entire order)
         $includePackaging = filter_var($request->include_packaging ?? true, FILTER_VALIDATE_BOOLEAN);
         if ($includePackaging) {
             $packagingPrice = floatval($this->getSetting('packaging_price', 5.00));
-            $totalCost += ($packagingPrice * $request->quantity);
+            $totalCost += $packagingPrice;
         }
         
         // Add shipping cost
@@ -229,8 +320,8 @@ class OrderController extends Controller
             Log::error('Insufficient balance:', [
                 'user_balance' => $user->balance,
                 'required_total_cost' => $totalCost,
-                'product_cost' => $productCost,
-                'packaging' => $includePackaging ? ($packagingPrice * $request->quantity) : 0,
+                'product_cost' => $totalProductCost,
+                'packaging' => $includePackaging ? $packagingPrice : 0,
                 'shipping' => $shippingPrice
             ]);
             return response()->json([
@@ -238,74 +329,61 @@ class OrderController extends Controller
                 'message' => "You need {$totalCost} MAD but your balance is {$user->balance} MAD. Please top up your account."
             ], 422);
         }
-        Log::info('Balance check passed:', [
-            'user_balance' => $user->balance,
-            'total_cost' => $totalCost,
-            'product_cost' => $productCost
-        ]);
 
         // Generate unique order number
         $orderNumber = $this->generateOrderNumber();
-        Log::info('Order number generated:', ['order_number' => $orderNumber]);
 
         try {
-            Log::info('Attempting to create or find customer...');
-            
-            // Create or find customer
+            // Create or find customer by phone
             $customer = Customer::where('user_id', $user->id)
-                               ->where('email', $request->customer_email)
+                               ->where('phone', $request->customer_phone)
                                ->first();
 
             if ($customer) {
-                Log::info('Existing customer found:', ['customer_id' => $customer->id]);
                 // Update customer info if different (but not shipping address)
                 $customer->update([
                     'name' => $request->customer_name,
-                    'phone' => $request->customer_phone,
+                    'email' => $request->customer_email,
                 ]);
             } else {
-                Log::info('Creating new customer...');
                 $customer = Customer::create([
                     'user_id' => $user->id,
                     'name' => $request->customer_name,
                     'email' => $request->customer_email,
                     'phone' => $request->customer_phone,
                 ]);
-                Log::info('Customer created:', ['customer_id' => $customer->id]);
             }
             
-            Log::info('Attempting to create order...');
-            
             // Deduct cost from seller's balance and create order in transaction
-            DB::transaction(function () use ($user, $customer, $orderNumber, $product, $request, $totalCost, $totalAmount, $unitPrice, $sellingPrice) {
+            DB::transaction(function () use ($user, $customer, $orderNumber, $mainProduct, $request, $totalCost, $totalAmount, $totalProductCost, $sellingPrice) {
                 // Create order
                 $order = Order::create([
                     'user_id' => $user->id,
                     'customer_id' => $customer->id,
-                    'product_id' => $product->id,
+                    'product_id' => $mainProduct->id,
                     'template_id' => null, // Simple orders don't use templates
                     'order_number' => $orderNumber,
                     'customization' => [
-                        'color' => $request->selected_color,
-                        'size' => $request->selected_size,
+                        'items' => $request->items,
                     ],
                     'quantity' => $request->quantity,
-                    'unit_price' => $unitPrice, // What seller pays for the product
+                    'unit_price' => $totalProductCost / $request->quantity, // Average unit price
                     'selling_price' => $sellingPrice, // What seller charges customer
-                    'total_amount' => $totalAmount,
+                    'total_amount' => $request->total_price, // Use total_price from frontend (for EliteSpeed COD)
                     'status' => 'PENDING',
                     'shipping_address' => $request->shipping_address,
+                    'is_reordered' => false,
+                    'reordered_from_id' => $request->items[0]['reorder_from_order_id'] ?? null,
                 ]);
                 
-                Log::info('Order created successfully:', ['order_id' => $order->id, 'order_number' => $order->order_number]);
+                // Mark original orders as reordered
+                $reorderedIds = array_filter(array_column($request->items, 'reorder_from_order_id'));
+                if (!empty($reorderedIds)) {
+                    Order::whereIn('id', $reorderedIds)->update(['is_reordered' => true]);
+                }
 
                 // Deduct total cost from seller's balance
                 $user->decrement('balance', $totalCost);
-                
-                Log::info('Balance deducted:', [
-                    'cost_deducted' => $totalCost,
-                    'new_balance' => $user->fresh()->balance
-                ]);
 
                 // Award points to seller and referrer
                 $pointsPerOrder = (int) $this->getSetting('points_per_order', 10);
@@ -321,40 +399,19 @@ class OrderController extends Controller
                         $refBonus = (int) $this->getSetting('referral_points_referrer', 100);
                         if ($referrer && $refBonus > 0) {
                             $referrer->increment('points', $refBonus);
-                            Log::info('Referrer bonus awarded for first order:', [
-                                'seller_id' => $user->id,
-                                'referrer_id' => $user->referred_by_id,
-                                'referrer_points' => $refBonus
-                            ]);
                         }
                     }
                 }
 
                 // Update customer statistics
                 $customer->updateStats($totalAmount);
-                Log::info('Customer stats updated');
             });
 
             // Get the order after transaction
             $order = Order::where('order_number', $orderNumber)->first();
 
-            // Log status history
-            /* try {
-                $order->statusHistory()->create([
-                    'old_status' => null,
-                    'new_status' => 'PENDING',
-                    'notes' => 'Order created',
-                    'updated_by' => $user->id,
-                ]);
-                Log::info('Order status history created');
-            } catch (\Exception $e) {
-                Log::error('Failed to create order status history:', ['error' => $e->getMessage()]);
-                // Continue even if status history fails
-            } */
-
             $order->load(['product', 'customer']);
-            
-            Log::info('=== ORDER CREATION DEBUG END - SUCCESS ===');
+
             return response()->json([
                 'message' => 'Order created successfully',
                 'data' => $order
@@ -373,20 +430,24 @@ class OrderController extends Controller
     /**
      * Create an order from a template
      */
-    public function createFromTemplate(Request $request): JsonResponse
+    public function createFromTemplate(Request $request, EliteSpeedService $shippingService): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'template_id' => 'required|exists:templates,id',
+            'template_id' => 'nullable|exists:templates,id', // Made optional - can be per-item
             'customer_name' => 'required|string|max:255',
-            'customer_email' => 'required|email|max:255',
+            'customer_email' => 'nullable|email|max:255',
             'customer_phone' => 'required|string|max:20',
+            'total_price' => 'required|numeric|min:0', // Total COD price for EliteSpeed
             'quantity' => 'required|integer|min:1',
-            'selected_color' => 'required|string',
-            'selected_size' => 'required|string',
+            'items' => 'required|array|min:1',
+            'items.*.template_id' => 'nullable|exists:templates,id', // Allow per-item template
+            'items.*.color' => 'required|string',
+            'items.*.size' => 'required|string',
+            'items.*.quantity' => 'required|integer|min:1',
             'shipping_address' => 'required|array',
             'shipping_address.street' => 'required|string|max:255',
             'shipping_address.city' => 'required|string|max:100',
-            'shipping_address.postal_code' => 'required|string|max:20',
+            'shipping_address.postal_code' => 'nullable|string|max:20',
         ]);
 
         if ($validator->fails()) {
@@ -404,70 +465,128 @@ class OrderController extends Controller
             ], 403);
         }
 
-        $template = Template::with('product')->find($request->template_id);
+        // Get the main template if specified, otherwise use first item's template
+        $mainTemplateId = $request->template_id ?? $request->items[0]['template_id'] ?? null;
+        if (!$mainTemplateId) {
+            return response()->json([
+                'error' => 'No template specified for order'
+            ], 422);
+        }
+
+        $mainTemplate = Template::with('product')->find($mainTemplateId);
 
         // Check if template belongs to seller and is approved
-        if ($template->user_id !== $user->id) {
+        if ($mainTemplate->user_id !== $user->id) {
             return response()->json([
                 'error' => 'Template not found'
             ], 404);
         }
 
-        if ($template->status !== 'APPROVED') {
+        if ($mainTemplate->status !== 'APPROVED') {
             return response()->json([
                 'error' => 'Template must be approved before creating orders'
             ], 422);
         }
 
-        // Validate color and size options against template (if defined)
-        if ($template->colors && is_array($template->colors) && !in_array($request->selected_color, $template->colors)) {
-            return response()->json([
-                'error' => 'Invalid color selection for this template'
-            ], 422);
-        }
-
-        if ($template->sizes && is_array($template->sizes) && !in_array($request->selected_size, $template->sizes)) {
-            return response()->json([
-                'error' => 'Invalid size selection for this template'
-            ], 422);
-        }
-
-        // Calculate total using template price or product base price
-        $unitPrice = $template->product->base_price;
-        
-        // Sum view prices if they have designs in the template
-        $designConfig = $this->normalizeDesignConfig($template->design_config);
-        $states = $designConfig['states'] ?? [];
-        $productViews = $template->product->views ?? [];
-        
-        foreach ($productViews as $productView) {
-            $viewKey = $productView['key'] ?? null;
-            if (!$viewKey) continue;
+        // Validate each item's template, color, and size
+        $totalProductCost = 0;
+        foreach ($request->items as $index => $item) {
+            // Use item's specific template_id or fall back to main template
+            $itemTemplateId = $item['template_id'] ?? $mainTemplateId;
+            $itemTemplate = Template::with('product')->find($itemTemplateId);
             
-            // Check if this view has a design (objects) in the template
-            $viewState = $states[$viewKey] ?? null;
-            if ($viewState) {
-                $decodedState = json_decode($viewState, true);
-                $objects = $decodedState['objects'] ?? [];
+            if (!$itemTemplate) {
+                return response()->json([
+                    'error' => "Template not found for item #" . ($index + 1)
+                ], 422);
+            }
+            
+            // Check template belongs to seller
+            if ($itemTemplate->user_id !== $user->id) {
+                return response()->json([
+                    'error' => "Template for item #" . ($index + 1) . " does not belong to you"
+                ], 422);
+            }
+            
+            // Check template is approved
+            if ($itemTemplate->status !== 'APPROVED') {
+                return response()->json([
+                    'error' => "Template for item #" . ($index + 1) . " must be approved"
+                ], 422);
+            }
+            
+            if ($itemTemplate->colors && is_array($itemTemplate->colors) && !in_array($item['color'], $itemTemplate->colors)) {
+                return response()->json([
+                    'error' => "Invalid color selection for item #" . ($index + 1) . " in this template"
+                ], 422);
+            }
+
+            if ($itemTemplate->sizes && is_array($itemTemplate->sizes) && !in_array($item['size'], $itemTemplate->sizes)) {
+                return response()->json([
+                    'error' => "Invalid size selection for item #" . ($index + 1) . " in this template"
+                ], 422);
+            }
+            
+            // Calculate unit price for this item's template
+            // Use seller-specific price or default base price
+            $basePrice = $this->getSellerPrice($user->id, $itemTemplate->product->id, $itemTemplate->product->base_price);
+            $itemUnitPrice = $basePrice;
+            
+            // Sum view prices if they have designs in the template
+            $designConfig = $this->normalizeDesignConfig($itemTemplate->design_config);
+            $states = $designConfig['states'] ?? [];
+            $productViews = $itemTemplate->product->views ?? [];
+            
+            foreach ($productViews as $productView) {
+                $viewKey = $productView['key'] ?? null;
+                if (!$viewKey) continue;
                 
-                // If there are any objects (stickers, text, etc.) in this view
-                if (!empty($objects)) {
-                    $viewPrice = floatval($productView['price'] ?? 0);
-                    // Only add view price if it's greater than 0 (free views don't add cost)
-                    if ($viewPrice > 0) {
-                        $unitPrice += $viewPrice;
+                // Check if this view has a design (objects) in the template
+                $viewState = $states[$viewKey] ?? null;
+                if ($viewState) {
+                    $decodedState = json_decode($viewState, true);
+                    $objects = $decodedState['objects'] ?? [];
+                    
+                    // If there are any objects (stickers, text, etc.) in this view
+                    if (!empty($objects)) {
+                        $viewPrice = floatval($productView['price'] ?? 0);
+                        // Only add view price if it's greater than 0 (free views don't add cost)
+                        if ($viewPrice > 0) {
+                            $itemUnitPrice += $viewPrice;
+                        }
                     }
                 }
             }
+            
+            // Add to total cost
+            $reorderId = $item['reorder_from_order_id'] ?? null;
+            if ($reorderId) {
+                 // Reorder logic
+                 $originalOrder = Order::find($reorderId);
+                 if (!$originalOrder || $originalOrder->user_id !== $user->id) {
+                     return response()->json([
+                        'error' => "Invalid reorder source for item #" . ($index + 1)
+                    ], 422);
+                 }
+                 if ($originalOrder->is_reordered) {
+                     return response()->json([
+                        'error' => "This return has already been reordered for item #" . ($index + 1)
+                    ], 422);
+                 }
+                 // No cost added
+            } else {
+                $totalProductCost += $itemUnitPrice * $item['quantity'];
+            }
         }
-        
-        $totalAmount = $unitPrice * $request->quantity;
 
-        // Add packaging and shipping costs
+        // Calculate total amount (what customer pays)
+        $totalAmount = $totalProductCost;
+
+        // Add packaging and shipping costs (flat rate for entire order)
         $includePackaging = filter_var($request->include_packaging ?? true, FILTER_VALIDATE_BOOLEAN);
         if ($includePackaging) {
             $packagingPrice = floatval($this->getSetting('packaging_price', 5.00));
-            $totalAmount += ($packagingPrice * $request->quantity);
+            $totalAmount += $packagingPrice;
         }
 
         $city = $request->shipping_city ?? ($request->shipping_address['city'] ?? 'Casablanca');
@@ -480,14 +599,24 @@ class OrderController extends Controller
         }
         $totalAmount += $shippingPrice;
 
+        // Check if user account is verified (activated)
+        if (!$user->is_verified) {
+            Log::warning('Unverified user attempted to create order:', [
+                'user_id' => $user->id,
+                'user_email' => $user->email
+            ]);
+            return response()->json([
+                'error' => 'Account not activated',
+                'message' => 'Your account is not activated yet. Please make your first deposit to activate your account and start placing orders.'
+            ], 403);
+        }
+
         // Check if user has sufficient balance (product cost + packaging + shipping)
-        $productCost = $unitPrice * $request->quantity;
         if ($user->balance < $totalAmount) {
             Log::error('Insufficient balance:', [
                 'user_balance' => $user->balance,
                 'required_total_amount' => $totalAmount,
-                'product_cost' => $productCost,
-                'unit_price' => $unitPrice,
+                'product_cost' => $totalProductCost,
                 'quantity' => $request->quantity
             ]);
             return response()->json([
@@ -495,78 +624,64 @@ class OrderController extends Controller
                 'message' => "You need {$totalAmount} MAD but your balance is {$user->balance} MAD. Please top up your account."
             ], 422);
         }
-        Log::info('Balance check passed:', [
-            'user_balance' => $user->balance,
-            'total_amount' => $totalAmount,
-            'product_cost' => $productCost,
-            'unit_price' => $unitPrice,
-            'quantity' => $request->quantity
-        ]);
 
         // Generate unique order number
         $orderNumber = $this->generateOrderNumber();
 
         try {
-            Log::info('Attempting to create or find customer...');
-            
-            // Create or find customer
+            // Create or find customer by phone
             $customer = Customer::where('user_id', $user->id)
-                               ->where('email', $request->customer_email)
+                               ->where('phone', $request->customer_phone)
                                ->first();
 
             if ($customer) {
-                Log::info('Existing customer found:', ['customer_id' => $customer->id]);
                 // Update customer info if different
                 $customer->update([
                     'name' => $request->customer_name,
-                    'phone' => $request->customer_phone,
+                    'email' => $request->customer_email,
                 ]);
             } else {
-                Log::info('Creating new customer...');
                 $customer = Customer::create([
                     'user_id' => $user->id,
                     'name' => $request->customer_name,
                     'email' => $request->customer_email,
                     'phone' => $request->customer_phone,
                 ]);
-                Log::info('Customer created:', ['customer_id' => $customer->id]);
             }
-            
-            Log::info('Attempting to create order...');
 
         // Deduct balance and create order in transaction
-        DB::transaction(function () use ($user, $customer, $template, $orderNumber, $request, $totalAmount, $unitPrice) {
+        DB::transaction(function () use ($user, $customer, $mainTemplate, $orderNumber, $request, $totalAmount, $totalProductCost) {
             // Create order
             $order = Order::create([
                 'user_id' => $user->id,
                 'customer_id' => $customer->id,
-                'template_id' => $template->id,
-                'product_id' => $template->product_id,
+                'template_id' => $mainTemplate->id,
+                'product_id' => $mainTemplate->product_id,
                 'order_number' => $orderNumber,
                 'customization' => [
-                    'color' => $request->selected_color,
-                    'size' => $request->selected_size,
-                    'design_config' => $template->design_config,
+                    'items' => $request->items,
+                    'design_config' => $mainTemplate->design_config,
                 ],
                 'quantity' => $request->quantity,
-                'unit_price' => $unitPrice,
-                'total_amount' => $totalAmount,
+                'unit_price' => $totalProductCost / $request->quantity, // Average unit price
+                'total_amount' => $request->total_price, // Use total_price from frontend (for EliteSpeed COD)
                 'status' => 'PENDING',
                 'customer_name' => $request->customer_name,
                 'customer_email' => $request->customer_email,
                 'customer_phone' => $request->customer_phone,
                 'shipping_address' => $request->shipping_address,
+                'is_reordered' => false,
+                'reordered_from_id' => $request->items[0]['reorder_from_order_id'] ?? null,
             ]);
+            
+            // Mark original orders as reordered
+            $reorderedIds = array_filter(array_column($request->items, 'reorder_from_order_id'));
+            if (!empty($reorderedIds)) {
+                Order::whereIn('id', $reorderedIds)->update(['is_reordered' => true]);
+            }
 
             // Deduct total cost from seller's balance
             $user->decrement('balance', $totalAmount);
-            
-            Log::info('Order created and balance deducted:', [
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
-                'cost_deducted' => $totalAmount,
-                'new_balance' => $user->fresh()->balance
-            ]);
 
             // Award points for template-based orders
             $pointsPerOrder = (int) $this->getSetting('points_per_order', 10);
@@ -582,11 +697,6 @@ class OrderController extends Controller
                     $refBonus = (int) $this->getSetting('referral_points_referrer', 100);
                     if ($referrer && $refBonus > 0) {
                         $referrer->increment('points', $refBonus);
-                        Log::info('Referrer bonus awarded for first order:', [
-                            'seller_id' => $user->id,
-                            'referrer_id' => $user->referred_by_id,
-                            'referrer_points' => $refBonus
-                        ]);
                     }
                 }
             }
@@ -596,24 +706,13 @@ class OrderController extends Controller
             $customer->increment('total_spent', $totalAmount);
             $customer->last_order_date = now();
             $customer->save();
-            Log::info('Customer stats updated');
         });
 
         // Get the order after transaction
         $order = Order::where('order_number', $orderNumber)->first();
-        Log::info('Order created successfully:', ['order_id' => $order->id, 'order_number' => $order->order_number]);
-
-        // Log status history
-        /* $order->statusHistory()->create([
-            'old_status' => null,
-            'new_status' => 'PENDING',
-            'notes' => 'Order created from template',
-            'updated_by' => $user->id,
-        ]); */
 
         $order->load(['product', 'template', 'customer']);
-        
-        Log::info('=== ORDER CREATION FROM TEMPLATE DEBUG END - SUCCESS ===');
+
         return response()->json([
             'message' => 'Order created successfully from template',
             'data' => $order
@@ -635,7 +734,7 @@ class OrderController extends Controller
     public function updateStatus(Request $request, Order $order): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'status' => 'required|in:PENDING,IN_PROGRESS,PRINTED,DELIVERING,SHIPPED,PAID,CANCELLED,RETURNED',
+            'status' => 'required|string|max:255',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -663,13 +762,10 @@ class OrderController extends Controller
             'status' => $newStatus
         ]);
 
-        // Log status change
-        /* $order->statusHistory()->create([
-            'old_status' => $oldStatus,
-            'new_status' => $newStatus,
-            'notes' => $request->notes,
-            'updated_by' => $user->id,
-        ]); */
+        // Automatically restrict reshipping if status is a return status
+        if ($order->isReturnStatus()) {
+            $order->update(['allow_reshipping' => false]);
+        }
 
         $order->load(['product', 'template', 'customer']);
 
@@ -721,8 +817,8 @@ class OrderController extends Controller
         $stats = [
             'total_orders' => Order::where('user_id', $user->id)->count(),
             'pending_orders' => Order::where('user_id', $user->id)->where('status', 'PENDING')->count(),
-            'completed_orders' => Order::where('user_id', $user->id)->where('status', 'PAID')->count(),
-            'total_revenue' => Order::where('user_id', $user->id)->where('status', 'PAID')->sum('total_amount'),
+            'completed_orders' => Order::where('user_id', $user->id)->where('status', 'LIKE', '%livré%')->count(),
+            'total_revenue' => Order::where('user_id', $user->id)->where('status', 'LIKE', '%livré%')->sum('total_amount'),
             'orders_by_status' => Order::where('user_id', $user->id)
                 ->groupBy('status')
                 ->selectRaw('status, count(*) as count')
@@ -736,121 +832,6 @@ class OrderController extends Controller
         ]);
     }
     
-    /**
-     * Test method to create order without authentication
-     */
-    public function createFromProductTest(Request $request): JsonResponse
-    {
-        Log::info('=== TEST ORDER CREATION DEBUG START ===');
-        Log::info('Test request data:', $request->all());
-        
-        $validator = Validator::make($request->all(), [
-            'product_id' => 'required|exists:products,id',
-            'customer_name' => 'required|string|max:255',
-            'customer_email' => 'required|email|max:255',
-            'customer_phone' => 'required|string|max:20',
-            'quantity' => 'required|integer|min:1',
-            'selling_price' => 'required|numeric|min:0',
-            'customization' => 'required|array',
-            'shipping_address' => 'required|array',
-            'unit_price' => 'required|numeric',
-            'total_amount' => 'required|numeric',
-        ]);
-
-        if ($validator->fails()) {
-            Log::error('Test validation failed:', $validator->errors()->toArray());
-            return response()->json([
-                'success' => false,
-                'error' => 'Validation failed',
-                'details' => $validator->errors()
-            ], 422);
-        }
-        Log::info('Test validation passed');
-
-        // For testing, we'll use user ID 4 as you specified
-        $seller = User::find(4);
-        if (!$seller || !$seller->isSeller()) {
-            Log::error('Seller with ID 4 not found or not a seller');
-            return response()->json(['success' => false, 'error' => 'Seller with ID 4 not found'], 404);
-        }
-        Log::info('Test seller found:', ['id' => $seller->id, 'email' => $seller->email]);
-        
-        $product = Product::find($request->product_id);
-        Log::info('Test product found:', ['id' => $product->id, 'name' => $product->name]);
-
-        // Generate unique order number
-        $orderNumber = $this->generateOrderNumber();
-        Log::info('Test order number generated:', ['order_number' => $orderNumber]);
-
-        try {
-            Log::info('Attempting to create or find test customer...');
-            
-            // Create or find customer
-            $customer = Customer::where('user_id', $seller->id)
-                               ->where('email', $request->customer_email)
-                               ->first();
-
-            if ($customer) {
-                Log::info('Existing test customer found:', ['customer_id' => $customer->id]);
-                // Update customer info if different (but not shipping address)
-                $customer->update([
-                    'name' => $request->customer_name,
-                    'phone' => $request->customer_phone,
-                ]);
-            } else {
-                Log::info('Creating new test customer...');
-                $customer = Customer::create([
-                    'user_id' => $seller->id,
-                    'name' => $request->customer_name,
-                    'email' => $request->customer_email,
-                    'phone' => $request->customer_phone,
-                ]);
-                Log::info('Test customer created:', ['customer_id' => $customer->id]);
-            }
-            
-            Log::info('Attempting to create test order...');
-            
-            // Create order
-            $order = Order::create([
-                'user_id' => $seller->id,
-                'customer_id' => $customer->id,
-                'product_id' => $product->id,
-                'order_number' => $orderNumber,
-                'customization' => $request->customization,
-                'quantity' => $request->quantity,
-                'unit_price' => $request->unit_price,
-                'selling_price' => $request->selling_price,
-                'total_amount' => $request->total_amount,
-                'status' => 'PENDING',
-                'shipping_address' => $request->shipping_address,
-            ]);
-            
-            Log::info('Test order created successfully:', ['order_id' => $order->id, 'order_number' => $order->order_number]);
-            
-            // Update customer statistics
-            $customer->updateStats($request->total_amount);
-            Log::info('Test customer stats updated');
-            
-            $order->load(['product', 'customer']);
-
-            Log::info('=== TEST ORDER CREATION DEBUG END - SUCCESS ===');
-            return response()->json([
-                'success' => true,
-                'message' => 'Order created successfully',
-                'data' => $order
-            ], 201);
-            
-        } catch (\Exception $e) {
-            Log::error('Test order creation failed:', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            
-            return response()->json([
-                'success' => false,
-                'error' => 'Order creation failed',
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    }
-
     /**
      * Download order assets (design and placement) as ZIP
      */
@@ -950,74 +931,26 @@ class OrderController extends Controller
     {
         $user = auth()->user();
 
-        // Check permission (Admin or owner seller)
-        if (!$user->isAdmin() && $order->user_id !== $user->id) {
+        // Check permission: admin has full access, employees need manage_orders permission, sellers need to own the order
+        if (!$user->isAdmin() && !$user->hasPermission('manage_orders') && $order->user_id !== $user->id) {
              return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        if ($order->tracking_number) {
+        if ($order->tracking_number && !$user->isAdmin() && !$user->hasPermission('manage_orders')) {
             return response()->json(['error' => 'Order already shipped (Tracking: ' . $order->tracking_number . ')'], 400);
         }
 
+        if (!$user->isAdmin() && !$user->hasPermission('manage_orders') && !$order->allow_reshipping) {
+            return response()->json(['error' => 'This order is restricted and cannot be reshipped. Please contact admin.'], 403);
+        }
+
         try {
-            // Prepare payload for EliteSpeed
-            // documentation: fullname, phone, city, address, price, product, qty, note, change(0/1), openpackage(0/1), from_stock(0/1), internal_id
-            
-            // Map City/Address
-            // Assuming we just pass the city name string. 
-            // If ID is needed we'd need a mapping, but docs show "La ville du client".
-            // The user request example shows "city": "CASABLANCA" (string) or object in response, but input likely string.
-            
-            $city = $order->shipping_address['city'] ?? 'Unknown';
-            $address = $order->shipping_address['street'] ?? 'Unknown';
-            
-            // Format Product string
-            $productName = $order->product ? $order->product->name : 'Custom Product';
-            // If multiple items, we might need to handle differently, but here 1 order = 1 product type usually (or X qty of it)
-            
-            $payload = [
-                'fullname' => $order->customer_name ?? ($order->customer ? $order->customer->name : 'Guest'),
-                'phone' => $this->sanitizePhoneNumber($order->customer_phone ?? ($order->customer ? $order->customer->phone : '')),
-                'city' => $city,
-                'address' => $address,
-                'price' => $order->total_amount, // COD amount
-                'product' => $productName,
-                'qty' => $order->quantity,
-                'note' => $request->note ?? '',
-                'change' => 0, // Default no exchange
-                'openpackage' => 1, // Let's default to 1 as per typical POD requests? or 0? keeping 1 to be safe or 0. Docs say "0 for No, 1 for Yes". Let's assume 1 (allow open) is better for success rate unless specified. 
-                                    // User prompt didn't specify preference, but showed "client_can_open": 0 in GET example.
-                                    // Let's set to 1 for "Allow open" as it reduces returns usually, or 0 safely.
-                                    // Let's stick to 1 (Yes) as a feature, or make it optional. 
-                                    // For now, hardcode 1 or use request input.
-                'internal_id' => $order->order_number,
-            ];
+            $result = $this->automateShipping($order, $shippingService, $request->note);
 
-            // Call Service
-            $result = $shippingService->createParcel($payload);
-
-            // If success
-            // Docs say: { "code": "ok", "message": "..." }
-            if (isset($result['code']) && $result['code'] === 'ok') {
-                
-                // Update Order
-                $trackingNumber = $result['code_shippment'] ?? $order->order_number;
-                
-                $order->update([
-                    'status' => 'PRINTED', 
-                    'tracking_number' => $trackingNumber,
-                ]);
-
-                return response()->json([
-                    'message' => 'Order shipped successfully',
-                    'data' => $result
-                ]);
-            } else {
-                 return response()->json([
-                    'error' => 'Shipping API returned unexpected status',
-                    'details' => $result
-                ], 500);
-            }
+            return response()->json([
+                'message' => 'Order shipped successfully',
+                'data' => $result
+            ]);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -1038,9 +971,99 @@ class OrderController extends Controller
 
         try {
             $tracking = $shippingService->trackParcel($order->tracking_number);
-            return response()->json(['data' => $tracking]);
+            
+            // Sync status to database
+            if ($tracking) {
+                // Extract status from different possible response formats
+                $externalStatus = null;
+                
+                if (isset($tracking['statut'])) {
+                    $externalStatus = $tracking['statut'];
+                } elseif (isset($tracking['last_status'])) {
+                    $externalStatus = $tracking['last_status'];
+                } elseif (isset($tracking['message'])) {
+                    $externalStatus = $tracking['message'];
+                } elseif (isset($tracking['data']) && is_array($tracking['data']) && !empty($tracking['data'])) {
+                    $latestEvent = $tracking['data'][0];
+                    $externalStatus = $latestEvent['status'] ?? null;
+                }
+                
+                if ($externalStatus) {
+                    $oldStatus = $order->status;
+                    
+                    // Update BOTH status and shipping_status with the raw delivery status
+                    $order->status = $externalStatus;
+                    $order->shipping_status = $externalStatus;
+                    
+                    // Check if it's a return status and restrict reshipping
+                    if ($order->isReturnStatus()) {
+                        $order->allow_reshipping = false;
+                    }
+                    
+                    // Credit seller when order transitions to delivered ("Livré")
+                    if ($this->isDeliveredStatus($externalStatus) && !$this->isDeliveredStatus($oldStatus)) {
+                        $this->creditSellerForDeliveredOrder($order);
+                    }
+                    
+                    $order->save();
+                    
+                    \Log::info("Order status synced via track", [
+                        'order_number' => $order->order_number,
+                        'old_status' => $oldStatus,
+                        'new_status' => $externalStatus
+                    ]);
+                }
+            }
+            
+            $order->load(['product', 'template', 'customer']);
+            
+            return response()->json([
+                'data' => $tracking,
+                'order' => $order
+            ]);
         } catch (\Exception $e) {
-             return response()->json(['error' => 'Failed to track parcel'], 500);
+             return response()->json(['error' => 'Failed to track parcel: ' . $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Check if status indicates delivered (order finished)
+     */
+    private function isDeliveredStatus(string $status): bool
+    {
+        return str_contains(strtolower($status), 'livré');
+    }
+    
+    /**
+     * Credit seller's balance when order is delivered
+     */
+    private function creditSellerForDeliveredOrder(Order $order): void
+    {
+        try {
+            $seller = $order->user;
+            
+            if (!$seller) {
+                \Log::error("Cannot credit seller - user not found for order {$order->order_number}");
+                return;
+            }
+
+            $creditAmount = $order->total_amount;
+            $oldBalance = $seller->balance;
+            $seller->increment('balance', $creditAmount);
+            $newBalance = $seller->fresh()->balance;
+
+            \Log::info("Seller credited for delivered order", [
+                'order_number' => $order->order_number,
+                'seller_id' => $seller->id,
+                'seller_email' => $seller->email,
+                'credit_amount' => $creditAmount,
+                'old_balance' => $oldBalance,
+                'new_balance' => $newBalance
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to credit seller for order {$order->order_number}", [
+                'error' => $e->getMessage()
+            ]);
         }
     }
 
@@ -1142,6 +1165,132 @@ class OrderController extends Controller
         }
     }
 
+    private function automateShipping(Order $order, EliteSpeedService $shippingService, ?string $note = ''): array
+    {
+        // Map City/Address
+        $city = $order->shipping_address['city'] ?? 'Unknown';
+        $address = $order->shipping_address['street'] ?? 'Unknown';
+        
+        // Format Product string - Handle multiple items
+        $productItems = [];
+        if ($order->customization && isset($order->customization['items'])) {
+            foreach ($order->customization['items'] as $item) {
+                $qty = $item['quantity'] ?? 1;
+                $size = $item['size'] ?? '';
+                $color = $item['color'] ?? '';
+                
+                // Try to find product name
+                $pName = 'Product';
+                if (isset($item['product_id'])) {
+                    $prod = Product::find($item['product_id']);
+                    $pName = $prod ? $prod->name : 'Product';
+                }
+                
+                $productItems[] = "{$qty}x {$pName} ({$size} {$color})";
+            }
+        }
+        
+        $productString = !empty($productItems) ? implode(', ', $productItems) : ($order->product ? $order->product->name : 'Custom Order');
+        
+        $payload = [
+            'fullname' => $order->customer_name ?? ($order->customer ? $order->customer->name : 'Guest'),
+            'phone' => $this->sanitizePhoneNumber($order->customer_phone ?? ($order->customer ? $order->customer->phone : '')),
+            'city' => $city,
+            'address' => $address,
+            'price' => $order->total_amount, // Use total_amount (set via total_price from frontend)
+            'product' => substr($productString, 0, 255), // Limit length
+            'qty' => $order->quantity,
+            'note' => $note ?? '',
+            'change' => 0,
+            'openpackage' => 1,
+            'internal_id' => $order->order_number,
+        ];
+
+        // Call Service
+        $result = $shippingService->createParcel($payload);
+
+        // If success
+        if (isset($result['code']) && $result['code'] === 'ok') {
+            $trackingNumber = $result['code_shippment'] ?? $order->order_number;
+            
+            $order->update([
+                'status' => 'PRINTED', 
+                'tracking_number' => $trackingNumber,
+            ]);
+            
+            return $result;
+        }
+
+        throw new \Exception('Shipping API returned unexpected status: ' . json_encode($result));
+    }
+
+    /**
+     * Admin toggle reshipping permission
+     */
+    public function toggleReshipping(Order $order): JsonResponse
+    {
+        $user = auth()->user();
+
+        // Check permission: admin has full access, employees need manage_orders permission
+        if (!$user->isAdmin() && !$user->hasPermission('manage_orders')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $order->update([
+            'allow_reshipping' => !$order->allow_reshipping
+        ]);
+
+        return response()->json([
+            'message' => 'Reshipping permission updated successfully',
+            'allow_reshipping' => $order->allow_reshipping
+        ]);
+    }
+
+    private function enrichOrderItems(Order $order)
+    {
+        $customization = $order->customization;
+        if (!isset($customization['items']) || !is_array($customization['items'])) {
+            return $order;
+        }
+
+        $items = $customization['items'];
+        foreach ($items as &$item) {
+            // Enrich with template data if present
+            if (isset($item['template_id'])) {
+                $template = Template::with('product')->find($item['template_id']);
+                if ($template) {
+                    $item['template'] = [
+                        'id' => $template->id,
+                        'title' => $template->title,
+                        'design_config' => $template->design_config,
+                        'product' => $template->product ? [
+                            'id' => $template->product->id,
+                            'name' => $template->product->name,
+                            'mockups' => $template->product->mockups,
+                            'image_url' => $template->product->image_url,
+                        ] : null
+                    ];
+                }
+            } elseif (isset($item['product_id'])) {
+                // Enrich with product data if no template (simple product item)
+                $product = Product::find($item['product_id']);
+                if ($product) {
+                    $item['product'] = [
+                        'id' => $product->id,
+                        'name' => $product->name,
+                        'mockups' => $product->mockups,
+                        'image_url' => $product->image_url,
+                    ];
+                }
+            }
+        }
+
+        $customization['items'] = $items;
+        // Assigning to a temporary property or updating the loaded customization
+        $order->customization = $customization;
+        return $order;
+    }
+
     private function sanitizePhoneNumber(?string $phone): string
     {
         if (!$phone) return '';
@@ -1159,5 +1308,76 @@ class OrderController extends Controller
         }
         
         return $phone;
+    }
+
+    /**
+     * Admin endpoint to manually trigger status sync
+     */
+    public function adminSyncStatuses(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+
+        // Check permission
+        if (!$user->isAdmin() && !$user->hasPermission('manage_orders')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $limit = $request->input('limit', 50);
+        $force = $request->boolean('force', false);
+
+        // Run sync command programmatically
+        \Illuminate\Support\Facades\Artisan::call('orders:sync-statuses', [
+            '--limit' => $limit,
+            '--force' => $force
+        ]);
+
+        $output = \Illuminate\Support\Facades\Artisan::output();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Order sync completed',
+            'output' => $output
+        ]);
+    }
+
+    /**
+     * Get sync statistics for admin dashboard
+     */
+    public function adminSyncStats(): JsonResponse
+    {
+        $user = auth()->user();
+
+        // Check permission
+        if (!$user->isAdmin() && !$user->hasPermission('view_orders')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $stats = [
+            'orders_with_tracking' => Order::whereNotNull('tracking_number')->count(),
+            'active_orders_to_sync' => Order::whereNotNull('tracking_number')
+                ->where('status', 'NOT LIKE', '%livré%')
+                ->count(),
+            'completed_orders' => Order::where('status', 'LIKE', '%livré%')->count(),
+            'returned_orders' => Order::where(function($q) {
+                    foreach (Order::RETURN_STATUSES as $status) {
+                        $q->orWhere('status', 'like', "%{$status}%");
+                    }
+                })->count(),
+            'orders_by_status' => Order::whereNotNull('tracking_number')
+                ->groupBy('status')
+                ->selectRaw('status, count(*) as count')
+                ->get()
+                ->pluck('count', 'status'),
+            'recent_updates' => Order::whereNotNull('tracking_number')
+                ->where('updated_at', '>=', now()->subHours(24))
+                ->orderBy('updated_at', 'desc')
+                ->limit(10)
+                ->get(['id', 'order_number', 'status', 'shipping_status', 'tracking_number', 'updated_at'])
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats
+        ]);
     }
 }

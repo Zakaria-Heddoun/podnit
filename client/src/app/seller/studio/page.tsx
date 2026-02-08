@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useRef, useState, useEffect, Suspense } from "react";
+import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 import DesignCanvas, { DesignCanvasRef } from "@/components/studio/design-canvas";
 import { SaveTemplateModal } from "@/components/studio/SaveTemplateModal";
+import { getApiUrl } from "@/lib/utils";
 
 function StudioContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const templateId = searchParams.get("id");
+  const templateId = searchParams.get("id") || searchParams.get("templateId");
   const productId = searchParams.get("product");
 
   const canvasRef = useRef<DesignCanvasRef>(null);
@@ -20,6 +22,43 @@ function StudioContent() {
   const [productMockups, setProductMockups] = useState<Record<string, string | null>>({});
   const [productPrintAreas, setProductPrintAreas] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
   const [productViews, setProductViews] = useState<any[]>([]);
+  const loadTemplate = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/seller/templates/${id}`, {
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to load template');
+
+      const data = await response.json();
+
+      const templateData = data.template || data.data;
+      
+      if (templateData && templateData.design_config && canvasRef.current) {
+        try {
+          const config = typeof templateData.design_config === 'string'
+            ? JSON.parse(templateData.design_config)
+            : templateData.design_config;
+
+          // Wait for canvas to be ready
+          setTimeout(() => {
+            canvasRef.current?.loadDesignData(config);
+          }, 500);
+        } catch (e) {
+          console.error('❌ Error parsing design config:', e);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading template:', error);
+      toast.error('Failed to load template details');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (templateId) {
@@ -27,11 +66,24 @@ function StudioContent() {
     }
   }, [templateId]);
 
+  // Reset canvas to blank when product data is loaded but no template is being edited
+  useEffect(() => {
+    if (!templateId && productId && !isProductLoading && Object.keys(productMockups).length > 0 && canvasRef.current) {
+      // Product mockups have been loaded, reset canvas to show blank design
+      canvasRef.current.loadDesignData({
+        states: {},
+        images: {},
+        views: [],
+        color: '#FFFFFF'
+      });
+    }
+  }, [templateId, productId, isProductLoading, productMockups]);
+
   useEffect(() => {
     const fetchProductColors = async (id: string) => {
       setIsProductLoading(true);
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_URL}/api/seller/products/${id}`, {
           headers: {
@@ -81,18 +133,7 @@ function StudioContent() {
           setProductColors(resolved);
         }
 
-        const mockups = payload?.data?.mockups || payload?.mockups || {};
-        const resolvedMockups: Record<string, string | null> = {};
-        Object.entries(mockups || {}).forEach(([key, val]) => {
-          if (typeof val === 'string') {
-            resolvedMockups[key] = val.startsWith('/') ? `${API_URL}${val}` : val;
-          }
-        });
-        setProductMockups(resolvedMockups);
-
-        const printAreas = payload?.data?.print_areas || payload?.print_areas || {};
-        setProductPrintAreas(printAreas);
-
+        // First get views and their mockups (these are the product's actual mockup images)
         const views = Array.isArray(payload?.data?.views) ? payload.data.views : [];
         const resolvedViews = views.map((v: any) => ({
           ...v,
@@ -100,6 +141,31 @@ function StudioContent() {
         }));
         setProductViews(resolvedViews);
 
+        // Build mockups from views (prioritize these over legacy mockups)
+        const mockupsFromViews: Record<string, string | null> = {};
+        resolvedViews.forEach((v: any) => {
+          if (v.mockup) {
+            mockupsFromViews[v.key] = v.mockup;
+          }
+        });
+
+        // Fall back to legacy mockups if no views exist
+        const legacyMockups = payload?.data?.mockups || payload?.mockups || {};
+        const resolvedMockups: Record<string, string | null> = {};
+        Object.entries(legacyMockups || {}).forEach(([key, val]) => {
+          if (typeof val === 'string') {
+            resolvedMockups[key] = val.startsWith('/') ? `${API_URL}${val}` : val;
+          }
+        });
+
+        // Merge: views mockups take precedence
+        const finalMockups = { ...resolvedMockups, ...mockupsFromViews };
+        setProductMockups(finalMockups);
+
+        // Get print areas from views first, then fall back to legacy
+        const printAreas = payload?.data?.print_areas || payload?.print_areas || {};
+        let finalPrintAreas = { ...printAreas };
+        
         if (resolvedViews.length > 0) {
           const areasMap: Record<string, { x: number; y: number; width: number; height: number }> = {};
           resolvedViews.forEach((v: any) => {
@@ -107,8 +173,9 @@ function StudioContent() {
               areasMap[v.key] = v.area;
             }
           });
-          setProductPrintAreas(areasMap);
+          finalPrintAreas = { ...finalPrintAreas, ...areasMap };
         }
+        setProductPrintAreas(finalPrintAreas);
       } catch (error) {
         console.error('Failed to load product colors', error);
       } finally {
@@ -121,57 +188,194 @@ function StudioContent() {
     }
   }, [productId]);
 
-  const loadTemplate = async (id: string) => {
-    setIsLoading(true);
+  const handleExport = async () => {
+    if (!canvasRef.current) {
+      toast.error('Canvas not ready');
+      return;
+    }
+
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/seller/templates/${id}`, {
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to load template');
-
-      const data = await response.json();
-      console.log('📥 Loaded template data:', {
-        templateId: data.template?.id || data.data?.id,
-        title: data.template?.title || data.data?.title,
-        hasDesignConfig: !!(data.template?.design_config || data.data?.design_config)
-      });
-
-      const templateData = data.template || data.data;
+      const currentViewKey = canvasRef.current.getCurrentArea();
+      const currentViewName = productViews.find(v => v.key === currentViewKey)?.name || currentViewKey;
       
-      if (templateData && templateData.design_config && canvasRef.current) {
-        try {
-          const config = typeof templateData.design_config === 'string'
-            ? JSON.parse(templateData.design_config)
-            : templateData.design_config;
-
-          console.log('📥 Design config structure:', {
-            hasStates: !!config.states,
-            hasImages: !!config.images,
-            hasViews: !!config.views,
-            stateKeys: config.states ? Object.keys(config.states) : [],
-            imageKeys: config.images ? Object.keys(config.images) : [],
-            viewKeys: config.views ? config.views.map((v: any) => v.key) : []
-          });
-
-          // Wait for canvas to be ready
-          setTimeout(() => {
-            console.log('📥 Loading design data into canvas...');
-            canvasRef.current?.loadDesignData(config);
-          }, 500);
-        } catch (e) {
-          console.error('❌ Error parsing design config:', e);
+      // Get the mockup URL for the current view
+      const mockupUrl = productMockups[currentViewKey] || productMockups['front'];
+      
+      // Get design data - this includes rendered canvas as data URL
+      // NOTE: getDesignData() saves state but doesn't modify the canvas
+      const designData = await canvasRef.current.getDesignData();
+      const designDataUrl = designData.images[currentViewKey];
+      
+      if (!designDataUrl) {
+        console.warn('⚠️ No design data URL found, trying all available images:', designData.images);
+        // Fallback to first available design
+        const firstDesignKey = Object.keys(designData.images).find(k => designData.images[k]);
+        if (!firstDesignKey) {
+          toast.error('No design to export. Please add some elements first.');
+          return;
         }
       }
+
+      const finalDesignUrl = designDataUrl || Object.values(designData.images).find((v: any) => v);
+      
+      if (!finalDesignUrl || typeof finalDesignUrl !== 'string') {
+        toast.error('Design data is invalid. Please try again.');
+        return;
+      }
+
+      // Create composite image (doesn't modify the canvas)
+      const compositeBlob = await createCompositeImage(finalDesignUrl, mockupUrl, currentViewKey);
+      
+      if (!compositeBlob) {
+        toast.error('Failed to create composite image');
+        return;
+      }
+
+      // Download
+      const url = window.URL.createObjectURL(compositeBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `design-${currentViewName}-composite.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      // Refresh canvas to ensure design is visible
+      if (canvasRef.current?.refreshCanvas) {
+        canvasRef.current.refreshCanvas();
+      }
+      
     } catch (error) {
-      console.error('❌ Error loading template:', error);
-      alert('Failed to load template details');
-    } finally {
-      setIsLoading(false);
+      console.error('❌ Export failed:', error);
+      toast.error('Failed to export design. Please try again.');
     }
+  };
+
+  const createCompositeImage = async (
+    designDataUrl: string,
+    mockupUrl: string | null | undefined,
+    viewKey: string
+  ): Promise<Blob | null> => {
+    return new Promise(async (resolve) => {
+      try {
+        const loadImage = async (url: string, label: string = 'Image'): Promise<HTMLImageElement> => {
+          return new Promise((resolve, reject) => {
+            if (!url || typeof url !== 'string') {
+              console.error(`❌ Invalid URL for ${label}:`, typeof url, url);
+              reject(new Error(`Invalid URL for ${label}`));
+              return;
+            }
+
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            
+            // Add timeout
+            const timeout = setTimeout(() => {
+              reject(new Error(`${label} load timeout`));
+            }, 10000);
+
+            img.onload = () => {
+              clearTimeout(timeout);
+              resolve(img);
+            };
+            
+            img.onerror = (e) => {
+              clearTimeout(timeout);
+              console.error(`❌ Failed to load ${label}:`, e, 'URL:', url.substring(0, 100));
+              reject(new Error(`Failed to load ${label}`));
+            };
+            
+            // If URL is from backend API, use proxy to avoid CORS
+            let finalUrl = url;
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            if (url.startsWith(API_URL) && label === 'Mockup') {
+              finalUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
+            }
+            
+            img.src = finalUrl;
+          });
+        };
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          console.error('❌ Failed to get canvas context');
+          resolve(null);
+          return;
+        }
+
+        // Load mockup first to get dimensions
+        let mockupImg: HTMLImageElement | null = null;
+        let canvasWidth = 1200;
+        let canvasHeight = 1400;
+
+        if (mockupUrl) {
+          try {
+            mockupImg = await loadImage(mockupUrl, 'Mockup');
+            canvasWidth = mockupImg.width;
+            canvasHeight = mockupImg.height;
+          } catch (e) {
+            console.warn('⚠️ Failed to load mockup:', e);
+          }
+        }
+
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+
+        // Draw background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+        // Draw mockup if loaded
+        if (mockupImg) {
+          try {
+            ctx.drawImage(mockupImg, 0, 0, canvasWidth, canvasHeight);
+          } catch (e) {
+            console.warn('⚠️ Failed to draw mockup:', e);
+          }
+        }
+
+        // Load and draw design
+        try {
+          const designImg = await loadImage(designDataUrl, 'Design');
+          
+          // Get print area from productPrintAreas
+          const printArea = productPrintAreas[viewKey];
+          
+          if (printArea) {
+            const printX = (printArea.x / 100) * canvasWidth;
+            const printY = (printArea.y / 100) * canvasHeight;
+            const printWidth = (printArea.width / 100) * canvasWidth;
+            const printHeight = (printArea.height / 100) * canvasHeight;
+            
+            ctx.drawImage(designImg, printX, printY, printWidth, printHeight);
+          } else {
+            // Fallback: center design on canvas
+            const designWidth = canvasWidth * 0.6;
+            const designHeight = canvasHeight * 0.6;
+            const designX = (canvasWidth - designWidth) / 2;
+            const designY = (canvasHeight - designHeight) / 2;
+            
+            ctx.drawImage(designImg, designX, designY, designWidth, designHeight);
+          }
+        } catch (e) {
+          console.error('❌ Failed to load/draw design:', e);
+        }
+
+        canvas.toBlob((blob: Blob | null) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            console.error('❌ Failed to create blob');
+            resolve(null);
+          }
+        }, 'image/png', 1.0);
+      } catch (error) {
+        console.error('❌ Error creating composite:', error);
+        resolve(null);
+      }
+    });
   };
 
   const handleSaveClick = () => {
@@ -181,18 +385,17 @@ function StudioContent() {
   const handleConfirmSave = async (name: string) => {
     if (!canvasRef.current) return;
     if (!productId) {
-      alert('Missing product reference for this template.');
+      toast.error('Missing product reference for this template.');
       return;
     }
 
     setIsSaving(true);
     try {
       const designData = await canvasRef.current.getDesignData();
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = getApiUrl();
       const token = localStorage.getItem('token');
 
       // Step 1: Upload images separately to avoid large payload
-      console.log('📤 Step 1: Uploading images separately...');
       const imageUrls: Record<string, string> = {};
 
       // Upload each image separately (only if it's base64, skip if already a URL)
@@ -206,14 +409,12 @@ function StudioContent() {
         // If it's already a URL, use it directly
         if (typeof data === 'string' && !data.startsWith('data:')) {
           imageUrls[key] = data;
-          console.log(`✅ Using existing URL for ${key}:`, data.substring(0, 50) + '...');
           continue;
         }
 
         // Upload base64 image
         try {
-          console.log(`📤 Uploading image for view: ${key}`);
-          const uploadResponse = await fetch(`${API_URL}/api/seller/templates/upload-image`, {
+          const uploadResponse = await fetch(`${API_URL || ''}/api/seller/templates/upload-image`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -229,7 +430,6 @@ function StudioContent() {
           if (uploadResponse.ok) {
             const uploadResult = await uploadResponse.json();
             imageUrls[key] = uploadResult.url;
-            console.log(`✅ Uploaded ${key}:`, uploadResult.url);
           } else {
             const errorText = await uploadResponse.text();
             console.warn(`⚠️ Failed to upload ${key}:`, errorText);
@@ -248,17 +448,7 @@ function StudioContent() {
         images: imageUrls,
       };
 
-      console.log('📤 Design config structure:', {
-        hasStates: !!designConfig.states,
-        hasImages: !!designConfig.images,
-        hasViews: !!designConfig.views,
-        stateKeys: designConfig.states ? Object.keys(designConfig.states) : [],
-        imageKeys: designConfig.images ? Object.keys(designConfig.images) : [],
-        viewKeys: designConfig.views ? designConfig.views.map((v: any) => v.key) : []
-      });
-
       // Step 2: Create template with image URLs (much smaller payload)
-      console.log('📤 Step 2: Creating template with image URLs...');
       const payload = {
         title: name,
         product_id: Number(productId),
@@ -267,13 +457,11 @@ function StudioContent() {
       };
 
       const url = templateId
-        ? `${API_URL}/api/seller/templates/${templateId}`
-        : `${API_URL}/api/seller/templates`;
+        ? `${API_URL || ''}/api/seller/templates/${templateId}`
+        : `${API_URL || ''}/api/seller/templates`;
 
       const method = templateId ? 'PUT' : 'POST';
 
-      console.log('📤 Creating template:', { url, method, payloadSize: JSON.stringify(payload).length });
-      
       const response = await fetch(url, {
         method,
         headers: {
@@ -283,8 +471,6 @@ function StudioContent() {
         },
         body: JSON.stringify(payload)
       });
-
-      console.log('📡 Response status:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -309,14 +495,27 @@ function StudioContent() {
       }
 
       const result = await response.json();
-      console.log('✅ Template saved:', result);
+      // Persist created template to sessionStorage as a fallback so seller list can show it immediately
+      try {
+        if (result?.data) {
+          sessionStorage.setItem('new_template', JSON.stringify(result.data));
+        }
+      } catch (e) {
+        console.warn('Failed to store new_template in sessionStorage', e);
+      }
 
       setIsModalOpen(false);
-      router.push('/seller/templates');
+      // Redirect to seller templates and pass the created template id so the list can show it immediately
+      const createdId = result?.data?.id || null;
+      if (createdId) {
+        router.push(`/seller/templates?new=1&templateId=${createdId}`);
+      } else {
+        router.push('/seller/templates');
+      }
     } catch (error: any) {
       console.error('❌ Error saving template:', error);
       const errorMessage = error?.message || 'Failed to save template. Please try again.';
-      alert(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -338,13 +537,24 @@ function StudioContent() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           {templateId ? 'Edit Template' : 'T-Shirt Designer Studio'}
         </h1>
-        <button
-          onClick={handleSaveClick}
-          className="absolute right-6 bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition-colors text-sm"
-          disabled={isLoading}
-        >
-          {isSaving ? 'Saving...' : 'Save Template'}
-        </button>
+        <div className="absolute right-6 flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export
+          </button>
+          <button
+            onClick={handleSaveClick}
+            className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition-colors text-sm"
+            disabled={isLoading}
+          >
+            {isSaving ? 'Saving...' : 'Save Template'}
+          </button>
+        </div>
       </div>
 
       {/* Fullscreen Design Canvas */}

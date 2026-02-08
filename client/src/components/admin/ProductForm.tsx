@@ -40,6 +40,13 @@ type ViewItem = {
   area: { x: number; y: number; width: number; height: number };
 };
 
+type GalleryItem = {
+  id: string; // for local keys
+  file: File | null;
+  url: string | null;
+  color: string | null; // Link to product color
+};
+
 interface ProductFormProps {
   mode: Mode;
   productId?: number;
@@ -69,13 +76,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => 
     { key: "front", name: "Front", area: cloneArea(), mockupFile: null, mockupUrl: null, price: null },
   ]);
   const [activeViewKey, setActiveViewKey] = useState<string>("front");
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
 
   useEffect(() => {
     const fetchProduct = async () => {
       if (!productId || mode === "create" || !token) return;
       setIsFetching(true);
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
         const response = await fetch(`${API_URL}/api/admin/products/${productId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -119,29 +127,45 @@ export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => 
           // Build views from product.views (preferred) or legacy mockups/print_areas
           let loadedViews: ViewItem[] = [];
           if (Array.isArray(productData.views) && productData.views.length > 0) {
-            loadedViews = productData.views.map((v: any, idx: number) => ({
-              key: v.key || `view_${idx}`,
-              name: v.name || v.key || `View ${idx + 1}`,
-              mockupUrl: v.mockup ? (v.mockup.startsWith("/") ? `${API_URL}${v.mockup}` : v.mockup) : null,
-              mockupFile: null,
-              price: typeof v.price === "number" ? v.price : null,
-              area: v.area || cloneArea(),
-            }));
+            loadedViews = productData.views.map((v: any, idx: number) => {
+              let price: number | null = null;
+              if (v.price !== null && v.price !== undefined && v.price !== "") {
+                const parsed = parseFloat(v.price);
+                price = isNaN(parsed) ? null : parsed;
+              }
+              return {
+                key: v.key || `view_${idx}`,
+                name: v.name || v.key || `View ${idx + 1}`,
+                mockupUrl: v.mockup ? (v.mockup.startsWith("/") ? `${API_URL}${v.mockup}` : v.mockup) : null,
+                mockupFile: null,
+                price: price,
+                area: v.area || cloneArea(),
+              };
+            });
           } else {
             const legacyMockups = productData.mockups || {};
             const legacyAreas = productData.print_areas || {};
             const legacyKeys = Object.keys(legacyMockups).length > 0 ? Object.keys(legacyMockups) : ["front"];
-            loadedViews = legacyKeys.map((key: string, idx: number) => ({
-              key,
-              name: key.charAt(0).toUpperCase() + key.slice(1),
-              mockupUrl: legacyMockups[key] ? (legacyMockups[key].startsWith("/") ? `${API_URL}${legacyMockups[key]}` : legacyMockups[key]) : null,
-              mockupFile: null,
-              price: null,
-              area: legacyAreas[key] || cloneArea(),
-            }));
+              loadedViews = legacyKeys.map((key: string, idx: number) => ({
+                key,
+                name: key.charAt(0).toUpperCase() + key.slice(1),
+                mockupUrl: legacyMockups[key] ? (legacyMockups[key].startsWith("/") ? `${API_URL}${legacyMockups[key]}` : legacyMockups[key]) : null,
+                mockupFile: null,
+                price: null,
+                area: legacyAreas[key] || cloneArea(),
+              }));
           }
-          setViews(loadedViews.length > 0 ? loadedViews : [{ key: "front", name: "Front", area: cloneArea(), mockupFile: null, mockupUrl: null, price: null }]);
+            setViews(loadedViews.length > 0 ? loadedViews : [{ key: "front", name: "Front", area: cloneArea(), mockupFile: null, mockupUrl: null, price: null }]);
           setActiveViewKey(loadedViews[0]?.key || "front");
+
+          if (Array.isArray(productData.gallery)) {
+            setGallery(productData.gallery.map((g: any, idx: number) => ({
+              id: `gallery_${idx}`,
+              file: null,
+              url: g.url ? (g.url.startsWith("/") ? `${API_URL}${g.url}` : g.url) : null,
+              color: g.color || null,
+            })));
+          }
 
           if (imageUrl) {
             setImagePreview(imageUrl.startsWith("http") ? imageUrl : `${API_URL}${imageUrl}`);
@@ -159,11 +183,25 @@ export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => 
   const handleImageChange = (file?: File | null) => {
     const f = file || null;
     setSelectedImageFile(f);
-    if (f) {
-      const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result as string);
-      reader.readAsDataURL(f);
-    }
+  };
+
+  const handleGalleryChange = (id: string, file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setGallery((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, file, url: reader.result as string } : item))
+      );
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const addGalleryItem = () => {
+    setGallery((prev) => [...prev, { id: `gallery_${Date.now()}`, file: null, url: null, color: null }]);
+  };
+
+  const removeGalleryItem = (id: string) => {
+    setGallery((prev) => prev.filter((item) => item.id !== id));
   };
 
   const handleMockupChange = (key: string, fileList: FileList | null) => {
@@ -230,7 +268,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => 
     }
     setIsLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
       const formDataToSend = new FormData();
       formDataToSend.append("name", formData.name);
       formDataToSend.append("base_price", formData.price);
@@ -249,13 +287,27 @@ export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => 
         formDataToSend.append(`views[${idx}][area][y]`, view.area.y.toString());
         formDataToSend.append(`views[${idx}][area][width]`, view.area.width.toString());
         formDataToSend.append(`views[${idx}][area][height]`, view.area.height.toString());
-        if (typeof view.price === "number") {
+        if (view.price !== null && view.price !== undefined) {
           formDataToSend.append(`views[${idx}][price]`, view.price.toString());
         }
         if (view.mockupFile) {
           formDataToSend.append(`views[${idx}][mockup]`, view.mockupFile);
         } else if (view.mockupUrl) {
           formDataToSend.append(`views[${idx}][mockup]`, view.mockupUrl);
+        }
+      });
+
+      gallery.forEach((item, idx) => {
+        if (item.file) {
+          formDataToSend.append(`gallery[${idx}][image]`, item.file);
+        } else if (item.url) {
+          // If it started with API_URL, strip it back
+          let cleanUrl = item.url;
+          if (cleanUrl.startsWith(API_URL)) cleanUrl = cleanUrl.substring(API_URL.length);
+          formDataToSend.append(`gallery[${idx}][url]`, cleanUrl);
+        }
+        if (item.color) {
+          formDataToSend.append(`gallery[${idx}][color]`, item.color);
         }
       });
 
@@ -387,285 +439,362 @@ export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => 
                   onChange={(e) => handleImageChange(e.target.files?.[0])}
                   className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-white/90 dark:file:bg-brand-900/20 dark:file:text-brand-400"
                 />
-              </div>
-              <div className="grid grid-cols-1 gap-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800 dark:text-white">Active</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Product visible to sellers</p>
+                <div className="grid grid-cols-1 gap-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 dark:text-white">Active</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Product visible to sellers</p>
+                    </div>
+                    <Switch
+                      label=""
+                      defaultChecked={formData.is_active}
+                      onChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                      color="green"
+                    />
                   </div>
-                  <Switch
-                    label=""
-                    defaultChecked={formData.is_active}
-                    onChange={(checked) => setFormData({ ...formData, is_active: checked })}
-                    color="green"
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800 dark:text-white">In Stock</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Allow ordering</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 dark:text-white">In Stock</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Allow ordering</p>
+                    </div>
+                    <Switch
+                      label=""
+                      defaultChecked={formData.in_stock}
+                      onChange={(checked) => setFormData({ ...formData, in_stock: checked })}
+                      color="blue"
+                    />
                   </div>
-                  <Switch
-                    label=""
-                    defaultChecked={formData.in_stock}
-                    onChange={(checked) => setFormData({ ...formData, in_stock: checked })}
-                    color="blue"
-                  />
                 </div>
               </div>
-            </div>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Available Sizes
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {AVAILABLE_SIZES.map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={() =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        available_sizes: prev.available_sizes.includes(size)
-                          ? prev.available_sizes.filter((s) => s !== size)
-                          : [...prev.available_sizes, size],
-                      }))
-                    }
-                    className={`rounded px-3 py-1 text-sm ${formData.available_sizes.includes(size)
-                      ? "bg-brand-500 text-white"
-                      : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-                      }`}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Available Colors
-              </label>
               <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  {formData.available_colors.map((color) => (
-                    <div
-                      key={color}
-                      className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/60"
-                    >
-                      <span
-                        className="h-6 w-6 rounded border border-gray-200 shadow-inner"
-                        style={{ backgroundColor: HEX_COLOR_REGEX.test(color) ? color : "#ffffff" }}
-                      />
-                      <span className="text-sm font-medium text-gray-800 dark:text-white">{color}</span>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Product Gallery</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Add multiple images and link them to colors.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addGalleryItem}
+                    className="rounded bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+                  >
+                    Add Image
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {gallery.map((item, idx) => (
+                    <div key={item.id} className="relative group rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-800/50">
                       <button
                         type="button"
-                        onClick={() => removeColor(color)}
-                        className="text-xs font-medium text-red-600 hover:text-red-700"
+                        onClick={() => removeGalleryItem(item.id)}
+                        className="absolute top-2 right-2 p-1 bg-red-100 text-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        Remove
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
                       </button>
+
+                      <div className="aspect-square mb-3 rounded-lg bg-gray-100 dark:bg-gray-900 flex items-center justify-center overflow-hidden border border-gray-200 dark:border-gray-700">
+                        {item.url ? (
+                          <img src={item.url} alt="Gallery item" className="w-full h-full object-cover" />
+                        ) : (
+                          <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </div>
+
+                      <div className="space-y-3">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleGalleryChange(item.id, e.target.files?.[0] || null)}
+                          className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-900/20 dark:file:text-brand-400"
+                        />
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                            Link to Color
+                          </label>
+                          <select
+                            value={item.color || ""}
+                            onChange={(e) =>
+                              setGallery((prev) =>
+                                prev.map((g) => (g.id === item.id ? { ...g, color: e.target.value || null } : g))
+                              )
+                            }
+                            className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 focus:border-brand-500 focus:ring-0 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                          >
+                            <option value="">No Color Link</option>
+                            {formData.available_colors.map((color) => (
+                              <option key={color} value={color}>
+                                {color}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   ))}
-                  {formData.available_colors.length === 0 && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      No colors yet. Add at least one hex color.
-                    </span>
+                  {gallery.length === 0 && (
+                    <div className="col-span-full py-8 text-center rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                      <p className="text-sm text-gray-500">No gallery images added. Click "Add Image" above.</p>
+                    </div>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    type="color"
-                    value={newColor}
-                    onChange={(e) => setNewColor(e.target.value.toUpperCase())}
-                    className="h-11 w-11 cursor-pointer rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
-                  />
-                  <input
-                    type="text"
-                    value={newColor}
-                    onChange={(e) => setNewColor(e.target.value.toUpperCase())}
-                    placeholder="#1F2937"
-                    className="flex-1 min-w-[160px] rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={addColor}
-                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
-                  >
-                    Add Color
-                  </button>
-                </div>
-                {colorError && <p className="text-xs text-red-600 dark:text-red-400">{colorError}</p>}
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Designers will see these colors in the studio background picker.
-                </p>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Product Views / Sides
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Available Sizes
                 </label>
-                <button
-                  type="button"
-                  onClick={addView}
-                  className="rounded bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
-                >
-                  Add View
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {views.map((view) => (
-                  <button
-                    key={view.key}
-                    type="button"
-                    onClick={() => setActiveViewKey(view.key)}
-                    className={`rounded px-3 py-1 text-sm ${activeViewKey === view.key ? "bg-brand-500 text-white" : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"}`}
-                  >
-                    {view.name}
-                  </button>
-                ))}
+                <div className="flex flex-wrap gap-2">
+                  {AVAILABLE_SIZES.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          available_sizes: prev.available_sizes.includes(size)
+                            ? prev.available_sizes.filter((s) => s !== size)
+                            : [...prev.available_sizes, size],
+                        }))
+                      }
+                      className={`rounded px-3 py-1 text-sm ${formData.available_sizes.includes(size)
+                        ? "bg-brand-500 text-white"
+                        : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                        }`}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {views.map((view) => {
-                if (view.key !== activeViewKey) return null;
-                return (
-                  <div key={view.key} className="space-y-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">View Name</label>
-                        <input
-                          type="text"
-                          value={view.name}
-                          onChange={(e) =>
-                            setViews((prev) =>
-                              prev.map((v) => (v.key === view.key ? { ...v, name: e.target.value } : v))
-                            )
-                          }
-                          className="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-0 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Available Colors
+                </label>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    {formData.available_colors.map((color) => (
+                      <div
+                        key={color}
+                        className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/60"
+                      >
+                        <span
+                          className="h-6 w-6 rounded border border-gray-200 shadow-inner"
+                          style={{ backgroundColor: HEX_COLOR_REGEX.test(color) ? color : "#ffffff" }}
                         />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">Price (optional)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={view.price ?? ""}
-                          onChange={(e) =>
-                            setViews((prev) =>
-                              prev.map((v) => (v.key === view.key ? { ...v, price: e.target.value === "" ? null : Number(e.target.value) } : v))
-                            )
-                          }
-                          className="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-0 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                          placeholder="e.g. 19.99"
-                        />
-                      </div>
-                      {views.length > 1 && (
+                        <span className="text-sm font-medium text-gray-800 dark:text-white">{color}</span>
                         <button
                           type="button"
-                          onClick={() => removeView(view.key)}
-                          className="text-sm text-red-600 hover:text-red-700"
+                          onClick={() => removeColor(color)}
+                          className="text-xs font-medium text-red-600 hover:text-red-700"
                         >
                           Remove
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    ))}
+                    {formData.available_colors.length === 0 && (
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        No colors yet. Add at least one hex color.
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      type="color"
+                      value={newColor}
+                      onChange={(e) => setNewColor(e.target.value.toUpperCase())}
+                      className="h-11 w-11 cursor-pointer rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                    />
+                    <input
+                      type="text"
+                      value={newColor}
+                      onChange={(e) => setNewColor(e.target.value.toUpperCase())}
+                      placeholder="#1F2937"
+                      className="flex-1 min-w-[160px] rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={addColor}
+                      className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+                    >
+                      Add Color
+                    </button>
+                  </div>
+                  {colorError && <p className="text-xs text-red-600 dark:text-red-400">{colorError}</p>}
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Designers will see these colors in the studio background picker.
+                  </p>
+                </div>
+              </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1.5">
-                        Mockup (PNG recommended)
-                      </label>
-                      {view.mockupUrl && (
-                        <img
-                          src={view.mockupUrl}
-                          alt={`${view.name} mockup`}
-                          className="h-40 w-full object-contain rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 mb-3"
-                        />
-                      )}
-                      <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-                  onChange={(e) => handleMockupChange(view.key, e.target.files)}
-                  className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-white/90 dark:file:bg-brand-900/20 dark:file:text-brand-400"
-                />
-                    </div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Product Views / Sides
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addView}
+                    className="rounded bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+                  >
+                    Add View
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {views.map((view) => (
+                    <button
+                      key={view.key}
+                      type="button"
+                      onClick={() => setActiveViewKey(view.key)}
+                      className={`rounded px-3 py-1 text-sm ${activeViewKey === view.key ? "bg-brand-500 text-white" : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"}`}
+                    >
+                      {view.name}
+                    </button>
+                  ))}
+                </div>
 
-                    <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                        Selection Area (percent of mockup)
-                      </label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                        <div className="space-y-3">
-                          {(["x", "y", "width", "height"] as const).map((field) => (
-                            <div key={field} className="space-y-1">
-                              <div className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300 capitalize">
-                                <span>{field}</span>
-                                <span>{view.area[field]}%</span>
-                              </div>
-                              <input
-                                type="range"
-                                min={field === "width" || field === "height" ? 5 : 0}
-                                max={100}
-                                value={view.area[field]}
-                                onChange={(e) => updatePrintArea(view.key, field, Number(e.target.value))}
-                                className="w-full"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div className="relative h-64 w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900 overflow-hidden">
-                          {view.mockupUrl ? (
-                            <img
-                              src={view.mockupUrl}
-                              alt={`${view.name} preview`}
-                              className="absolute inset-0 h-full w-full object-contain"
-                            />
-                          ) : (
-                            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400">
-                              Upload mockup to preview
-                            </div>
-                          )}
-                          <div
-                            className="absolute border-2 border-brand-500 bg-brand-500/20 rounded"
-                            style={{
-                              top: `${view.area.y}%`,
-                              left: `${view.area.x}%`,
-                              width: `${view.area.width}%`,
-                              height: `${view.area.height}%`,
-                              maxWidth: "100%",
-                              maxHeight: "100%",
-                            }}
+                {views.map((view) => {
+                  if (view.key !== activeViewKey) return null;
+                  return (
+                    <div key={view.key} className="space-y-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">View Name</label>
+                          <input
+                            type="text"
+                            value={view.name}
+                            onChange={(e) =>
+                              setViews((prev) =>
+                                prev.map((v) => (v.key === view.key ? { ...v, name: e.target.value } : v))
+                              )
+                            }
+                            className="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-0 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                           />
                         </div>
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">Price (optional)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={view.price ?? ""}
+                            onChange={(e) =>
+                              setViews((prev) =>
+                                prev.map((v) => (v.key === view.key ? { ...v, price: e.target.value === "" ? null : Number(e.target.value) } : v))
+                              )
+                            }
+                            className="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:ring-0 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                            placeholder="e.g. 19.99"
+                          />
+                        </div>
+                        {views.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeView(view.key)}
+                            className="text-sm text-red-600 hover:text-red-700"
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
-                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                        The selection area is where the customer's design will be placed on the mockup inside the studio.
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
 
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/10"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
-            >
-              {isLoading ? "Saving..." : "Save Product"}
-            </button>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1.5">
+                          Mockup (PNG recommended)
+                        </label>
+                        {view.mockupUrl && (
+                          <img
+                            src={view.mockupUrl}
+                            alt={`${view.name} mockup`}
+                            className="h-40 w-full object-contain rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 mb-3"
+                          />
+                        )}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                          onChange={(e) => handleMockupChange(view.key, e.target.files)}
+                          className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-white/90 dark:file:bg-brand-900/20 dark:file:text-brand-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                          Selection Area (percent of mockup)
+                        </label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                          <div className="space-y-3">
+                            {(["x", "y", "width", "height"] as const).map((field) => (
+                              <div key={field} className="space-y-1">
+                                <div className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300 capitalize">
+                                  <span>{field}</span>
+                                  <span>{view.area[field]}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={field === "width" || field === "height" ? 5 : 0}
+                                  max={100}
+                                  value={view.area[field]}
+                                  onChange={(e) => updatePrintArea(view.key, field, Number(e.target.value))}
+                                  className="w-full"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div className="relative h-64 w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900 overflow-hidden">
+                            {view.mockupUrl ? (
+                              <img
+                                src={view.mockupUrl}
+                                alt={`${view.name} preview`}
+                                className="absolute inset-0 h-full w-full object-contain"
+                              />
+                            ) : (
+                              <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400">
+                                Upload mockup to preview
+                              </div>
+                            )}
+                            <div
+                              className="absolute border-2 border-brand-500 bg-brand-500/20 rounded"
+                              style={{
+                                top: `${view.area.y}%`,
+                                left: `${view.area.x}%`,
+                                width: `${view.area.width}%`,
+                                height: `${view.area.height}%`,
+                                maxWidth: "100%",
+                                maxHeight: "100%",
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          The selection area is where the customer's design will be placed on the mockup inside the studio.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+              >
+                {isLoading ? "Saving..." : "Save Product"}
+              </button>
+            </div>
           </div>
         </form>
       )}

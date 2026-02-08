@@ -124,8 +124,9 @@ export interface Order {
   };
   product: string;
   amount: number;
-  status: "Completed" | "Processing" | "Cancelled" | "Refunded";
+  status: string;
   date: string;
+  trackingNumber?: string;
   paymentMethod?: string;
 }
 
@@ -146,17 +147,23 @@ export interface Customer {
 export interface Return {
   id: number;
   returnNumber: string;
+  orderNumber: string;
   customer: {
     name: string;
     email: string;
     avatar?: string;
   };
   product: string;
-  templateName: string;
+  templateName?: string;
+  color?: string;
+  size?: string;
+  quantity?: number;
   amount: number;
-  status: "Approved" | "Pending" | "Rejected" | "Refunded";
+  status: string;
   date: string;
   reason?: string;
+  customization?: any;
+  allow_reshipping?: boolean;
 }
 
 export interface Seller {

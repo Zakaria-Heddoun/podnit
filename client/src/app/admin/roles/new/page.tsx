@@ -5,9 +5,11 @@ import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 export default function NewRolePage() {
   const { toast } = useToast();
+  const { token } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,31 +34,25 @@ export default function NewRolePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return toast({ title: 'Validation', description: 'Name is required' });
+    if (!token) return toast({ title: 'Error', description: 'Not authenticated' });
+
     setLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      // Ensure CSRF cookie is present and X-XSRF-TOKEN header is set for Sanctum
-      try {
-        await fetch(`${API_URL}/sanctum/csrf-cookie`, { credentials: 'include' });
-      } catch (err) {
-        // ignore — server might already have set cookies
-      }
-
-      // helper to read cookie value
-      const getCookie = (name: string) => {
-        if (typeof document === 'undefined') return null;
-        const match = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
-        return match ? decodeURIComponent(match[2]) : null;
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`
       };
 
-      const xsrf = getCookie('XSRF-TOKEN');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-      if (xsrf) headers['X-XSRF-TOKEN'] = xsrf;
+      const res = await fetch(`${API_URL}/api/admin/roles`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name, description, permissions: selectedPermissions })
+      });
 
-      const res = await fetch(`${API_URL}/api/admin/roles`, { method: 'POST', headers, body: JSON.stringify({ name, description, permissions: selectedPermissions }), credentials: 'include' });
       if (!res.ok) {
-        const d = await res.json().catch(()=>null);
-        // throw a descriptive error including status
+        const d = await res.json().catch(() => null);
         throw new Error(d?.message || `${res.status} ${res.statusText}` || 'Failed to create role');
       }
       toast({ title: 'Role created' });
@@ -69,22 +65,27 @@ export default function NewRolePage() {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      if (!token) return;
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const res = await fetch(`${API_URL}/api/admin/roles/permissions`, { credentials: 'include', headers: { 'Accept': 'application/json' } });
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const headers = {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`
+        };
+        const res = await fetch(`${API_URL}/api/admin/roles/permissions`, { headers });
         if (!res.ok) {
           // try dev-only unprotected endpoint as a fallback for local development
           const d = await res.json().catch(() => null);
           if (mounted) setPermLoadError(d?.message || res.statusText || 'Failed to load permissions');
           try {
             const devRes = await fetch(`${API_URL}/api/dev/roles/permissions`, { headers: { 'Accept': 'application/json' } });
-              if (devRes.ok) {
-                const devData = await devRes.json().catch(() => null);
-                if (mounted) setAvailablePermissions(devData?.data || {});
-                // clear permLoadError since dev endpoint succeeded
-                if (mounted) setPermLoadError(null);
-                return;
-              }
+            if (devRes.ok) {
+              const devData = await devRes.json().catch(() => null);
+              if (mounted) setAvailablePermissions(devData?.data || {});
+              // clear permLoadError since dev endpoint succeeded
+              if (mounted) setPermLoadError(null);
+              return;
+            }
           } catch (err) {
             // ignore dev endpoint failure and fall through to using fallback permissions
           }
@@ -99,7 +100,7 @@ export default function NewRolePage() {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [token]);
 
   const togglePermission = (key: string) => {
     setSelectedPermissions((prev) => (prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]));
@@ -114,11 +115,11 @@ export default function NewRolePage() {
       <form onSubmit={handleSubmit} className="space-y-4 bg-white dark:bg-gray-900 p-6 rounded-lg shadow-sm">
         <div>
           <Label htmlFor="name">Name</Label>
-          <Input id="name" value={name} onChange={(e)=>setName(e.target.value)} placeholder="manager" />
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="manager" />
         </div>
         <div>
           <Label htmlFor="description">Description</Label>
-          <Input id="description" value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Role description" />
+          <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Role description" />
         </div>
         <div>
           <div className="flex items-center justify-between">
@@ -150,7 +151,7 @@ export default function NewRolePage() {
           <button type="submit" className="inline-flex items-center justify-center font-medium gap-2 rounded-lg transition px-5 py-3.5 text-sm bg-brand-500 text-white shadow-theme-xs hover:bg-brand-600 disabled:bg-brand-300">
             {loading ? 'Saving...' : 'Create Role'}
           </button>
-          <Button variant="outline" onClick={()=>{ setName(''); setDescription(''); }}>Reset</Button>
+          <Button variant="outline" onClick={() => { setName(''); setDescription(''); }}>Reset</Button>
         </div>
       </form>
     </div>
