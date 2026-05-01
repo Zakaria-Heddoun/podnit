@@ -62,7 +62,6 @@ Route::middleware(['auth:sanctum'])->prefix('seller')->group(function () {
     Route::post('/orders/from-template', [OrderController::class, 'createFromTemplate']);
     Route::post('/orders', [OrderController::class, 'createFromProduct']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
-    Route::post('/orders/{order}/mark-returned', [OrderController::class, 'markAsReturned']);
 
     // Templates
     Route::get('/templates', [TemplateController::class, 'index']);

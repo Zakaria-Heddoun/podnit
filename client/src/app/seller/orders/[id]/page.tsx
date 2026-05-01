@@ -94,7 +94,7 @@ export default function SellerOrderDetailPage() {
 
     const [order, setOrder] = useState<OrderDetail | null>(null);
     const [loading, setLoading] = useState(true);
-    const [returnLoading, setReturnLoading] = useState(false);
+
 
     // Re-rendered design images per group (same fix as Admin Review Template)
     const [renderedImages, setRenderedImages] = useState<Record<string, Record<string, string>>>({});
@@ -369,33 +369,6 @@ export default function SellerOrderDetailPage() {
 
     const getStatusColor = getOrderStatusBadgeColor;
 
-    const handleMarkAsReturned = async () => {
-        if (!order) return;
-        if (!window.confirm(`Mark order ${order.order_number} as RETURNED?`)) return;
-        setReturnLoading(true);
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`/api/seller/orders/${order.id}/mark-returned`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({}),
-            });
-            const result = await response.json();
-            if (response.ok) {
-                toast.success('Order marked as returned');
-                setOrder(prev => prev ? { ...prev, status: 'RETURNED' } : null);
-            } else {
-                toast.error(result.error || 'Failed to mark as returned');
-            }
-        } catch {
-            toast.error('An error occurred');
-        } finally {
-            setReturnLoading(false);
-        }
-    };
 
     const handleToggleReshipping = async () => {
         if (!isAdmin) return;
@@ -478,15 +451,6 @@ export default function SellerOrderDetailPage() {
                     <Badge color={getStatusColor(order.status)}>
                         {order.status}
                     </Badge>
-                    {order.status !== 'RETURNED' && order.status !== 'CANCELLED' && (
-                        <Button
-                            onClick={handleMarkAsReturned}
-                            disabled={returnLoading}
-                            className="bg-orange-600 hover:bg-orange-700 text-white"
-                        >
-                            {returnLoading ? 'Processing...' : 'Mark as Returned'}
-                        </Button>
-                    )}
                     <Button onClick={() => router.push('/seller/orders')} variant="outline">
                         Back to Orders
                     </Button>

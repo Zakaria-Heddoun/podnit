@@ -204,32 +204,6 @@ export default function SellerOrders() {
     window.location.href = `/seller/orders/${order.id}`;
   };
 
-  const handleMarkAsReturned = async (order: Order) => {
-    if (!window.confirm(`Mark order ${order.orderNumber} as RETURNED?`)) return;
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/seller/orders/${order.id}/mark-returned`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-      if (response.ok) {
-        toast.success(`Order ${order.orderNumber} marked as returned`);
-        setOrders(prev =>
-          prev.map(o => o.id === order.id ? { ...o, status: 'RETURNED' as any } : o)
-        );
-      } else {
-        const result = await response.json();
-        toast.error(result.error || 'Failed to mark as returned');
-      }
-    } catch {
-      toast.error('An error occurred');
-    }
-  };
-
   const handleDownload = () => {
     toast.info('Downloading all orders as CSV...');
     // TODO: Implement CSV export
@@ -352,7 +326,6 @@ export default function SellerOrders() {
         onSelectionChange={handleSelectionChange}
         onBulkAction={handleBulkAction}
         onEdit={handleViewDetails}
-        onMarkAsReturned={handleMarkAsReturned}
         onDownload={handleDownload}
       />
     </div>

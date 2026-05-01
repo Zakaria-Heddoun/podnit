@@ -41,12 +41,7 @@ class OrderController extends Controller
 
         // Filter by returns if requested
         if ($request->get('filter') === 'returns') {
-            $query->where(function($q) {
-                foreach (Order::RETURN_STATUSES as $status) {
-                    $q->orWhere('status', 'like', "%{$status}%")
-                      ->orWhere('shipping_status', 'like', "%{$status}%");
-                }
-            });
+            $query->where('status', 'RETURNED');
         }
 
         // Search functionality
@@ -114,12 +109,7 @@ class OrderController extends Controller
 
         // Filter by returns if requested
         if ($request->get('filter') === 'returns') {
-            $query->where(function($q) {
-                foreach (Order::RETURN_STATUSES as $status) {
-                    $q->orWhere('status', 'like', "%{$status}%")
-                      ->orWhere('shipping_status', 'like', "%{$status}%");
-                }
-            });
+            $query->where('status', 'RETURNED');
         }
 
         // Search functionality
@@ -989,10 +979,7 @@ class OrderController extends Controller
     {
         $user = auth()->user();
 
-        // Admin and employees with manage_orders can mark any order.
-        // Sellers can only mark their own orders.
-        $isSeller = !$user->isAdmin() && !$user->hasPermission('manage_orders');
-        if ($isSeller && $order->user_id !== $user->id) {
+        if (!$user->isAdmin() && !$user->hasPermission('manage_orders')) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
