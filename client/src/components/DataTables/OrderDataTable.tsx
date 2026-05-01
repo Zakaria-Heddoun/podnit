@@ -247,7 +247,7 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">{customerLabel}</p>
                 </div>
               </div>
-              <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+              <div className="col-span-3 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                 <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("product")}>
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Product</p>
                 </div>
@@ -302,7 +302,7 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                     </div>
                   </div>
                 </div>
-                <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+                <div className="col-span-3 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                   <p className="text-theme-sm text-gray-900 dark:text-white">{order.product}</p>
                 </div>
                 <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
