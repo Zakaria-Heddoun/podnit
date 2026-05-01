@@ -243,11 +243,6 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                 </div>
               </div>
               <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
-                <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("trackingNumber")}>
-                  <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Ref Number</p>
-                </div>
-              </div>
-              <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                 <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("customer")}>
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">{customerLabel}</p>
                 </div>
@@ -298,9 +293,6 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                 )}
                 <div className={`${enableSelection ? 'col-span-1' : 'col-span-2'} flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800`}>
                   <p className="text-theme-sm font-medium text-gray-900 dark:text-white">{order.orderNumber}</p>
-                </div>
-                <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
-                  <p className="text-theme-sm font-medium text-gray-900 dark:text-white">{order.trackingNumber || 'N/A'}</p>
                 </div>
                 <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                   <div className="flex items-center">
@@ -433,10 +425,6 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Date:</span>
                     <span className="text-sm text-gray-900 dark:text-white">{order.date}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Ref Number:</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{order.trackingNumber || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Email:</span>
