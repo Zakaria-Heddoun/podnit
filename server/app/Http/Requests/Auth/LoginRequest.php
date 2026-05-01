@@ -3,14 +3,28 @@
 namespace App\Http\Requests\Auth;
 
 use Illuminate\Auth\Events\Lockout;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
+    /**
+     * Prepare the data for validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        $email = trim((string) $this->input('email', ''));
+
+        $this->merge([
+            'email' => Str::lower($email),
+        ]);
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -41,7 +55,15 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        $email = Str::lower((string) $this->input('email'));
+        $password = (string) $this->input('password');
+        $remember = $this->boolean('remember');
+
+        $user = User::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->first();
+
+        if (! $user || ! Hash::check($password, $user->password)) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
@@ -49,8 +71,9 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        Auth::login($user, $remember);
+
         // Check if the user is active (for sellers)
-        $user = Auth::user();
         if ($user && $user->role === 'seller' && !$user->is_active) {
             Auth::logout();
             throw ValidationException::withMessages([

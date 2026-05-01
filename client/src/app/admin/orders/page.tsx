@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Order } from "@/types/datatable";
 
 // Order status is a free-form string (raw delivery API statuses)
+type OrderStatus = string;
 
 interface OrderApiResponse {
   id: number;
@@ -37,6 +38,7 @@ interface OrderApiResponse {
   selling_price?: number;
   total_amount: number;
   status: OrderStatus;
+  is_paid: boolean;
   customization: {
     color: string;
     size: string;
@@ -88,6 +90,7 @@ export default function AdminOrders() {
       product: apiOrder.product?.name || 'Unknown Product',
       amount: apiOrder.total_amount,
       status: apiOrder.status as any,
+      isPaid: apiOrder.is_paid,
       date: new Date(apiOrder.created_at).toLocaleDateString(),
       trackingNumber: apiOrder.tracking_number,
       paymentMethod: undefined
@@ -100,7 +103,7 @@ export default function AdminOrders() {
       setLoading(true);
 
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         const token = localStorage.getItem('token');
 
         // Fetch ALL orders from admin endpoint
@@ -195,6 +198,32 @@ export default function AdminOrders() {
 
   const handleViewDetails = (order: Order) => {
     window.location.href = `/admin/orders/${order.id}`;
+  };
+
+  const handleMarkAsReturned = async (order: Order) => {
+    if (!window.confirm(`Mark order ${order.orderNumber} as RETURNED?`)) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/orders/${order.id}/mark-returned`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      if (response.ok) {
+        toast.success(`Order ${order.orderNumber} marked as returned`);
+        setOrders(prev =>
+          prev.map(o => o.id === order.id ? { ...o, status: 'RETURNED' as any } : o)
+        );
+      } else {
+        const result = await response.json();
+        toast.error(result.error || 'Failed to mark as returned');
+      }
+    } catch {
+      toast.error('An error occurred');
+    }
   };
 
   const handleDownload = () => {
@@ -304,6 +333,7 @@ export default function AdminOrders() {
         onSelectionChange={handleSelectionChange}
         onBulkAction={handleBulkAction}
         onEdit={handleViewDetails}
+        onMarkAsReturned={hasPermission('manage_orders') ? handleMarkAsReturned : undefined}
         onDownload={handleDownload}
       />
     </div>

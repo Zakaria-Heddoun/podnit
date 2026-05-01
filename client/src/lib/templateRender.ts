@@ -4,7 +4,7 @@
  * to avoid CORS/auth issues with direct API image URLs.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+const API_URL = '';
 
 /** Load image natural dimensions */
 export function loadImageDimensions(url: string): Promise<{ width: number; height: number }> {
@@ -126,7 +126,9 @@ export async function renderDesignFromState(
 /** Convert API URLs to proxy URLs for display (avoids CORS/auth) */
 export function proxyMockupUrl(url: string | null): string | null {
     if (!url) return null;
-    if (url.startsWith(API_URL)) {
+    // Only proxy absolute API URLs that would cause CORS issues.
+    // Relative paths (starting with /) are same-origin and don't need proxying.
+    if (API_URL && url.startsWith(API_URL)) {
         return `/api/proxy-image?url=${encodeURIComponent(url)}`;
     }
     return url;
@@ -141,10 +143,8 @@ async function loadImageForComposite(url: string): Promise<HTMLImageElement> {
     }
 
     let fetchUrl = url;
-    if (url.startsWith('/api/') || url.startsWith(API_URL)) {
-        if (!url.startsWith('/api/')) {
-            fetchUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
-        }
+    if (API_URL && url.startsWith(API_URL) && !url.startsWith('/api/')) {
+        fetchUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
     }
 
     const response = await fetch(fetchUrl, { headers });
@@ -188,8 +188,8 @@ export async function createCleanCompositeImage(
         let canvasHeight = 1400;
         let mockupImg: HTMLImageElement | null = null;
 
-        // Use proxy for mockup if it's from API
-        const effectiveMockupUrl = mockupUrl ? (mockupUrl.startsWith(API_URL) ? `/api/proxy-image?url=${encodeURIComponent(mockupUrl)}` : mockupUrl) : null;
+        // Only proxy absolute API URLs; relative paths are same-origin
+        const effectiveMockupUrl = mockupUrl ? ((API_URL && mockupUrl.startsWith(API_URL)) ? `/api/proxy-image?url=${encodeURIComponent(mockupUrl)}` : mockupUrl) : null;
 
         if (effectiveMockupUrl) {
             try {

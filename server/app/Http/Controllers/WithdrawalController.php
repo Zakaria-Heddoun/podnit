@@ -55,7 +55,7 @@ class WithdrawalController extends Controller
             }
 
             // Validate that user has complete bank details
-            if (!$user->bank_name || !$user->account_holder || !$user->rib) {
+            if (!$user->bank_name || !$user->rib) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Your bank details are incomplete. Please contact support to update your profile.'
@@ -109,8 +109,10 @@ class WithdrawalController extends Controller
             $netAmount = $request->amount - $fee;
 
             // Use bank details from user's profile
+            $nameParts = preg_split('/\s+/', trim((string) $user->name), 2);
             $bankDetails = [
-                'account_holder' => $user->account_holder,
+                'first_name' => $nameParts[0] ?? '',
+                'last_name' => $nameParts[1] ?? '',
                 'rib' => $user->rib,
             ];
 

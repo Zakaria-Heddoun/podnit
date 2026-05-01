@@ -1,75 +1,78 @@
 /**
  * Shared utility for order status display.
- * 
- * Orders use raw delivery API (EliteSpeed) statuses in French.
- * The only internal statuses are PENDING and PRINTED.
- * After PRINTED, the status is whatever the delivery API returns.
- * 
- * When status is "Livré" → order is delivered/finished.
- * Return statuses: "En voyage", "hors zone", "Annuler", "Refusé"
+ *
+ * Internal statuses: PENDING, PRINTED, RETURNED, CANCELLED, PAID, SHIPPED, DELIVERING
+ * OZON statuses may be raw French strings pushed via webhook.
+ * Returns are now MANUAL only — the RETURNED status is set by admin/employee.
  */
 
 export type BadgeColor = 'success' | 'warning' | 'error' | 'info' | 'light';
 
 /**
- * The exact return statuses from EliteSpeed delivery API.
- * Must match the server-side Order::RETURN_STATUSES.
- */
-export const RETURN_STATUSES = [
-    'en voyage',
-    'hors zone',
-    'annuler',
-    'refusé',
-];
-
-/**
- * Check if a status is a return status.
+ * Check if a status represents a returned order.
+ * With the manual return system, the only canonical return status is RETURNED.
+ * We also keep the legacy French strings in case any old orders still carry them.
  */
 export function isReturnStatus(status: string): boolean {
     if (!status) return false;
     const s = status.toLowerCase().trim();
-    return RETURN_STATUSES.some(rs => s.includes(rs));
+    return (
+        s === 'returned' ||
+        s.includes('prêt pour le retour') ||
+        s.includes('retour client expédié') ||
+        s.includes('retour client reçu')
+    );
 }
 
 /**
  * Get a Badge color for an order status string.
- * Works with both internal statuses (PENDING, PRINTED) and
- * raw French delivery API statuses (Livré, Refusé, etc.)
  */
 export function getOrderStatusBadgeColor(status: string): BadgeColor {
     if (!status) return 'light';
     const s = status.toLowerCase().trim();
 
-    // --- Delivered (finished) ---
-    if (s === 'livré') return 'success';
+    // Internal: returned (manual)
+    if (s === 'returned') return 'error';
 
-    // --- Internal statuses ---
+    // Internal: delivered / paid
+    if (s === 'paid' || s === 'livré' || s.includes('payé') || s.includes('paye')) return 'success';
+
+    // Internal: pending
     if (s === 'pending') return 'warning';
+
+    // Internal: printed (BL created on OZON)
     if (s === 'printed') return 'info';
 
-    // --- Return statuses (en voyage, hors zone, annuler, refusé) ---
+    // Internal: cancelled
+    if (s === 'cancelled') return 'error';
+
+    // Legacy French return statuses (old orders)
     if (isReturnStatus(status)) return 'error';
 
-    // --- Positive in-transit statuses ---
-    if (s.includes('en cours de livraison')) return 'info';
-    if (s.includes('expédié') || s.includes('expedie')) return 'info';
-    if (s.includes('ramassé') || s.includes('ramasse')) return 'info';
-    if (s.includes('en transit')) return 'info';
-    if (s.includes('au dépôt') || s.includes('au depot')) return 'info';
-    if (s.includes('en cours de ramassage')) return 'info';
-    if (s.includes('reçu par agence')) return 'info';
-    if (s.includes('en attente')) return 'warning';
-    if (s.includes('programmé') || s.includes('programme')) return 'info';
-    if (s.includes('report')) return 'warning';
-    if (s.includes('demande de suivi')) return 'warning';
+    // In-transit / shipping
+    if (
+        s.includes('en cours') ||
+        s.includes('expédié') || s.includes('expedie') ||
+        s.includes('ramassé') || s.includes('ramasse') ||
+        s.includes('en transit') ||
+        s.includes('livraison') ||
+        s.includes('distribut') ||
+        s.includes('livreur') ||
+        s === 'shipped' ||
+        s === 'delivering'
+    ) return 'info';
 
-    // --- Partial delivery ---
-    if (s.includes('livré parcial') || s.includes('livre parcial')) return 'warning';
+    // Scheduled / waiting
+    if (
+        s.includes('programmé') || s.includes('programme') ||
+        s.includes('en attente') ||
+        s.includes('réceptionné') || s.includes('receptionne') ||
+        s.includes('reporté') || s.includes('reporte') ||
+        s.includes('demande de suivi') ||
+        s.includes('changement') ||
+        s.includes('intéressé') || s.includes('interesse')
+    ) return 'warning';
 
-    // --- Payment ---
-    if (s.includes('payé') || s.includes('paye') || s === 'paid') return 'success';
-
-    // Default
     return 'light';
 }
 
@@ -93,19 +96,18 @@ export function getOrderStatusClasses(status: string): string {
 }
 
 /**
- * Check if a status means the order has been shipped/sent to delivery.
- * Used to determine if the "Ship" button should be disabled.
+ * True when the order has moved past PENDING (ship button should be disabled).
  */
 export function isOrderShipped(status: string): boolean {
     if (!status) return false;
-    const s = status.toLowerCase().trim();
-    return s !== 'pending';
+    return status.toLowerCase().trim() !== 'pending';
 }
 
 /**
- * Check if a status means the order is delivered/finished.
+ * True when the order is fully delivered.
  */
 export function isOrderDelivered(status: string): boolean {
     if (!status) return false;
-    return status.toLowerCase().trim() === 'livré';
+    const s = status.toLowerCase().trim();
+    return s === 'paid' || s === 'livré';
 }

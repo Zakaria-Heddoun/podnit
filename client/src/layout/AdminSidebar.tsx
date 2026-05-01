@@ -110,10 +110,10 @@ const navItems: NavItem[] = [
 
 const AdminSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
-  const { isAdmin, isEmployee, hasPermission } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
 
   // Check if user can view a nav item based on permissions
-  const canViewNav = (nav: NavItem): boolean => {
+  const canViewNav = useCallback((nav: NavItem): boolean => {
     // Admin sees everything
     if (isAdmin) return true;
     
@@ -129,10 +129,10 @@ const AdminSidebar: React.FC = () => {
     
     // Permission is array - user needs at least one
     return nav.permission.some((p) => hasPermission(p));
-  };
+  }, [hasPermission, isAdmin]);
 
   // Check if user can view a sub item
-  const canViewSubItem = (subItem: NavItem['subItems'][0]): boolean => {
+  const canViewSubItem = useCallback((subItem: NavItem['subItems'][0]): boolean => {
     if (!subItem.permission) return true; // No permission = visible
     
     if (typeof subItem.permission === 'string') {
@@ -140,7 +140,7 @@ const AdminSidebar: React.FC = () => {
     }
     
     return subItem.permission.some((p) => hasPermission(p));
-  };
+  }, [hasPermission]);
 
   const pathname = usePathname();
 
@@ -300,7 +300,7 @@ const AdminSidebar: React.FC = () => {
     if (!submenuMatched) {
       setOpenSubmenu(null);
     }
-  }, [pathname, isActive]);
+  }, [pathname, isActive, canViewNav]);
 
   useEffect(() => {
     // Set the height of the submenu items when the submenu is opened

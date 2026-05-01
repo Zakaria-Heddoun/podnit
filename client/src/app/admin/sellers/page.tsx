@@ -28,7 +28,7 @@ export default function AdminSellersPage() {
   const fetchSellers = async () => {
     setLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+      const API_URL = "";
       const response = await fetch(`${API_URL}/api/admin/sellers`, {
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -50,7 +50,7 @@ export default function AdminSellersPage() {
   const handleActivate = async (seller: Seller) => {
     if (!token) return;
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+      const API_URL = "";
       const response = await fetch(`${API_URL}/api/admin/sellers/${seller.id}/activate`, {
         method: "PUT",
         headers: {
@@ -92,7 +92,7 @@ export default function AdminSellersPage() {
     e.preventDefault();
     if (!editingSeller || !token) return;
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+      const API_URL = "";
 
       // Filter out empty password if it wasn't changed
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

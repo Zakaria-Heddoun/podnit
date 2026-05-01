@@ -49,12 +49,64 @@ class DesignAssetController extends Controller
         }
 
         $request->validate([
-            'title' => 'required|string|max:255',
-            'image' => 'required', // base64 or file
+            'title' => 'nullable|string|max:255',
+            'image' => 'nullable', // base64 or file
+            'images' => 'nullable|array|min:1',
+            'images.*' => 'file|mimes:jpg,jpeg,png,gif,webp|max:10240',
             'category' => 'nullable|string|max:100',
         ]);
 
-        $imageUrl = $this->saveImage($request->image, $request->title);
+        $createdAssets = [];
+
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+                $title = Str::limit($originalName ?: 'Design', 255, '');
+                $imageUrl = $this->saveImage($file, $title);
+
+                if (!$imageUrl) {
+                    continue;
+                }
+
+                $asset = DesignAsset::create([
+                    'title' => $title,
+                    'image_path' => $imageUrl,
+                    'category' => $request->category,
+                ]);
+
+                $createdAssets[] = [
+                    'id' => $asset->id,
+                    'title' => $asset->title,
+                    'image_path' => $asset->image_path,
+                    'image_url' => $this->getFullUrl($asset->image_path),
+                    'category' => $asset->category,
+                ];
+            }
+
+            if (empty($createdAssets)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to save uploaded images',
+                ], 400);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => count($createdAssets) . ' design(s) added successfully',
+                'data' => $createdAssets,
+            ], 201);
+        }
+
+        if (!$request->hasFile('image') && !$request->filled('image')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Image is required',
+            ], 422);
+        }
+
+        $title = (string) ($request->title ?: 'Design');
+        $imageData = $request->hasFile('image') ? $request->file('image') : $request->image;
+        $imageUrl = $this->saveImage($imageData, $title);
         if (!$imageUrl) {
             return response()->json([
                 'success' => false,
@@ -63,7 +115,7 @@ class DesignAssetController extends Controller
         }
 
         $asset = DesignAsset::create([
-            'title' => $request->title,
+            'title' => $title,
             'image_path' => $imageUrl,
             'category' => $request->category,
         ]);
@@ -109,8 +161,10 @@ class DesignAssetController extends Controller
     {
         if (!$path) return '';
         if (str_starts_with($path, 'http')) return $path;
-        $base = rtrim(config('app.url'), '/');
-        return $base . (str_starts_with($path, '/') ? $path : '/' . $path);
+
+        // Return a normalized relative URL so local/prod frontends can resolve
+        // through their own host (and Next.js rewrites in local dev).
+        return '/' . ltrim($path, '/');
     }
 
     private function saveImage($data, string $prefix): ?string

@@ -115,7 +115,7 @@ export default function SellerProducts() {
         }
         params.append('per_page', '20');
 
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         const response = await fetch(`${API_URL}/api/seller/products?${params}`, {
           headers: {
             'Authorization': `Bearer ${token}`,

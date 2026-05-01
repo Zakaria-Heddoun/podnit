@@ -74,7 +74,7 @@ interface OrderFormData {
   customer_name: string;
   customer_email?: string; // Optional now
   customer_phone: string;
-  total_price: number; // Total COD amount for EliteSpeed
+  total_price: number; // Total COD amount collected on delivery
   items: OrderItem[];
   shipping_address: {
     street: string;
@@ -108,6 +108,7 @@ export default function CreateOrderPage() {
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [availableTemplates, setAvailableTemplates] = useState<Template[]>([]);
   const [availableReturns, setAvailableReturns] = useState<ReturnItem[]>([]);
+  const totalPriceManualRef = React.useRef(false);
 
   // Check account verification status
   useEffect(() => {
@@ -171,7 +172,7 @@ export default function CreateOrderPage() {
     if (!token) return;
     const fetchSettings = async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         const res = await fetch(`${API_URL}/api/seller/settings`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -223,7 +224,7 @@ export default function CreateOrderPage() {
         return;
       }
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
 
         // Fetch products
         const productsRes = await fetch(`${API_URL}/api/seller/products`, {
@@ -419,6 +420,9 @@ export default function CreateOrderPage() {
                   return `${getApiUrl()}${url.startsWith('/') ? '' : '/'}${url}`;
                 };
                 let baseCost = parseFloat(fullTemplate.calculated_price || fullTemplate.product?.base_price) || 0;
+                const templateProductColors = fullTemplate.product?.available_colors || [];
+                const templateProductSizes = fullTemplate.product?.available_sizes || [];
+                const templateProductInStock = fullTemplate.product?.in_stock !== false;
 
                 setTemplate({
                   templateId: fullTemplate.id,
@@ -428,6 +432,9 @@ export default function CreateOrderPage() {
                   templateImage: resolveUrl(fullTemplate.thumbnail_image),
                   productImages: fullTemplate.product?.product_images?.map((img: any) => resolveUrl(img.image_url)) || [],
                   productImage: resolveUrl(fullTemplate.product?.image_url),
+                  productColors: templateProductColors,
+                  productSizes: templateProductSizes,
+                  productInStock: templateProductInStock
                 });
 
                 // Also add to availableTemplates so getItemImage can find it
@@ -442,12 +449,15 @@ export default function CreateOrderPage() {
                     templateImage: resolveUrl(fullTemplate.thumbnail_image),
                     productImages: fullTemplate.product?.product_images?.map((img: any) => resolveUrl(img.image_url)) || [],
                     productImage: resolveUrl(fullTemplate.product?.image_url),
+                    productColors: templateProductColors,
+                    productSizes: templateProductSizes,
+                    productInStock: templateProductInStock
                   }];
                 });
 
                 setFormData(prev => ({
                   ...prev,
-                  items: [{ id: '1', template_id: fullTemplate.id, color: fullTemplate.colors?.[0] || 'Black', size: fullTemplate.sizes?.[0] || 'M', quantity: 1, selling_price: baseCost }]
+                  items: [{ id: '1', template_id: fullTemplate.id, color: templateProductColors[0] || '', size: templateProductSizes[0] || '', quantity: 1, selling_price: baseCost }]
                 }));
 
                 // Try to resolve a matching product by category so colors/sizes populate
@@ -513,7 +523,7 @@ export default function CreateOrderPage() {
       if (!token) { setLoading(false); return; }
 
       const fetchProduct = async () => {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         try {
           const response = await fetch(`${API_URL}/api/seller/products/${productId}`, {
             headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
@@ -552,8 +562,9 @@ export default function CreateOrderPage() {
     }
   }, [productId, templateParam, token, loadingAuth, reorderOrderId, reorderItemParam]); // Added reorder deps
 
-  // Auto-calculate total_price when items change
+  // Auto-calculate total_price when items change, unless user manually edited it
   useEffect(() => {
+    if (totalPriceManualRef.current) return;
     const calculatedTotal = formData.items.reduce((sum, item) => {
       return sum + (item.selling_price * item.quantity);
     }, 0);
@@ -669,6 +680,9 @@ export default function CreateOrderPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    if (name === 'total_price') {
+      totalPriceManualRef.current = true;
+    }
     if (name.includes('shipping_address.')) {
       const field = name.split('.')[1];
       setFormData(prev => ({
@@ -723,7 +737,7 @@ export default function CreateOrderPage() {
     return undefined;
   };
 
-  // Format phone number to international format for EliteSpeed API
+  // Format phone number to standard format
   const formatPhoneNumber = (phone: string): string => {
     // Remove all non-digit characters
     const digitsOnly = phone.replace(/\D/g, '');
@@ -873,7 +887,7 @@ export default function CreateOrderPage() {
         payload.selling_price = totalQty > 0 ? totalRevenue / totalQty : 0;
       }
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const apiUrl = `${API_URL}/api/seller/orders/${endpoint}`;
 
       const response = await fetch(apiUrl, {

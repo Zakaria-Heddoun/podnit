@@ -82,14 +82,12 @@ export default function EmployeeTemplatesPage() {
 
     try {
       setIsLoading(true);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
-      const url = new URL(`${API_URL}/api/admin/templates`);
+      let url = '/api/admin/templates';
       if (selectedStatus !== 'All') {
-        url.searchParams.append('status', selectedStatus);
+        url += `?status=${encodeURIComponent(selectedStatus)}`;
       }
 
-
-      const response = await fetch(url.toString(), {
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -138,7 +136,7 @@ export default function EmployeeTemplatesPage() {
     }
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const response = await fetch(`${API_URL}/api/admin/templates/${id}/approve`, {
         method: 'PUT',
         headers: {
@@ -195,7 +193,7 @@ export default function EmployeeTemplatesPage() {
     setIsProcessing(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const response = await fetch(`${API_URL}/api/admin/templates/${selectedTemplateId}/reject`, {
         method: 'PUT',
         headers: {

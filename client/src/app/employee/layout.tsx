@@ -39,10 +39,7 @@ export default function EmployeeLayout({
                 { key: 'view_dashboard', label: 'Dashboard', href: '/employee/dashboard' },
                 { key: 'view_orders', label: 'Orders', href: '/employee/orders' },
                 { key: 'view_products', label: 'Products', href: '/employee/products' },
-                { key: 'manage_templates', label: 'Templates', href: '/employee/templates' },
-                { key: 'approve_templates', label: 'Approve Templates', href: '/employee/templates/approvals' },
-                { key: 'approve_designs', label: 'Approve Designs', href: '/employee/designs/approvals' },
-                { key: 'view_users', label: 'Users', href: '/employee/users' },
+                { key: 'approve_templates', label: 'Templates', href: '/employee/templates' },
               ]
             ).map((item) => (
               hasPermission(item.key) ? (

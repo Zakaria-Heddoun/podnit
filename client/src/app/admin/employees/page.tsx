@@ -27,7 +27,7 @@ export default function EmployeesPage() {
       if (!token) return;
       setLoading(true);
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         const res = await fetch(`${API_URL}/api/admin/employees`, {
           headers: {
             'Authorization': `Bearer ${token}`,

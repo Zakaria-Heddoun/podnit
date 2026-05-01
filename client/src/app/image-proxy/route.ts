@@ -13,22 +13,26 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'URL parameter required' }, { status: 400 });
         }
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
-        const apiHost = new URL(apiUrl).hostname;
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
         let fullUrl: string;
+
         if (imageUrl.startsWith('/')) {
-            fullUrl = `${apiUrl.replace(/\/$/, '')}${imageUrl}`;
+            // Relative path — resolve against API backend or same origin
+            const base = apiUrl || `http://localhost:8000`;
+            fullUrl = `${base.replace(/\/$/, '')}${imageUrl}`;
         } else if (imageUrl.startsWith('http')) {
-            try {
-                const parsed = new URL(imageUrl);
-                if (parsed.hostname !== apiHost) {
-                    return NextResponse.json({ error: 'Invalid URL domain' }, { status: 403 });
+            // Only allow same-origin or API host
+            if (apiUrl) {
+                try {
+                    const apiHost = new URL(apiUrl).hostname;
+                    const parsed = new URL(imageUrl);
+                    if (parsed.hostname !== apiHost) {
+                        return NextResponse.json({ error: 'Invalid URL domain' }, { status: 403 });
+                    }
+                } catch {
+                    return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
                 }
-            } catch {
-                return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
             }
-            fullUrl = imageUrl;
-        } else if (imageUrl.startsWith(apiUrl)) {
             fullUrl = imageUrl;
         } else {
             return NextResponse.json({ error: 'Invalid URL' }, { status: 403 });
@@ -39,7 +43,17 @@ export async function GET(request: NextRequest) {
             headers['Authorization'] = token;
         }
 
-        const response = await fetch(fullUrl, { headers });
+	const response = await fetch(fullUrl, {
+    		headers,
+    		redirect: "manual",
+	});
+
+	if (response.status >= 300 && response.status < 400) {
+    		return NextResponse.json(
+        		{ error: "Redirects are not allowed" },
+        		{ status: 400 }
+    		);
+	}
 
         if (!response.ok) {
             return NextResponse.json(
@@ -47,6 +61,15 @@ export async function GET(request: NextRequest) {
                 { status: response.status }
             );
         }
+	
+	const contentType = response.headers.get('content-type') || '';
+
+	if (!contentType.startsWith('image/')) {
+    		return NextResponse.json(
+        		{ error: 'Only images are allowed' },
+        		{ status: 400 }
+    		);
+	}
 
         const buffer = await response.arrayBuffer();
 

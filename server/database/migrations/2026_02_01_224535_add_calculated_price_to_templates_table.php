@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('templates', function (Blueprint $table) {
-            $table->decimal('calculated_price', 10, 2)->nullable()->after('thumbnail_image');
-        });
+        if (!Schema::hasColumn('templates', 'calculated_price')) {
+            Schema::table('templates', function (Blueprint $table) {
+                $table->decimal('calculated_price', 10, 2)->nullable()->after('thumbnail_image');
+            });
+        }
     }
 
     /**
@@ -21,8 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('templates', function (Blueprint $table) {
-            $table->dropColumn('calculated_price');
-        });
+        if (Schema::hasColumn('templates', 'calculated_price')) {
+            Schema::table('templates', function (Blueprint $table) {
+                $table->dropColumn('calculated_price');
+            });
+        }
     }
 };

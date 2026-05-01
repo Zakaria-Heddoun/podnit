@@ -1,9 +1,9 @@
-import { toast as sonnerToast, externalToast } from "sonner"
+import { toast as sonnerToast, type Action, type ExternalToast } from "sonner"
 
-type ToastProps = {
+type ToastProps = Omit<ExternalToast, "description" | "action"> & {
   title?: React.ReactNode
   description?: React.ReactNode
-  action?: React.ReactNode
+  action?: Action | React.ReactNode
   variant?: "default" | "destructive"
 }
 
@@ -11,15 +11,15 @@ function toast({ title, description, variant, ...props }: ToastProps) {
   if (variant === "destructive") {
     return sonnerToast.error(title, {
       description: description,
-      action: props.action as any,
-      ...props as any,
+      action: props.action,
+      ...props,
     })
   }
 
   return sonnerToast(title, {
     description: description,
-    action: props.action as any,
-    ...props as any,
+    action: props.action,
+    ...props,
   })
 }
 

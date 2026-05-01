@@ -54,7 +54,7 @@ export default function AdminReturns() {
     if (!user) return;
     setLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const token = localStorage.getItem('token');
 
       const response = await fetch(`${API_URL}/api/admin/orders?filter=returns&per_page=200`, {
@@ -142,7 +142,7 @@ export default function AdminReturns() {
 
   const handleApprove = async (returnItem: Return) => {
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const token = localStorage.getItem('token');
 
       const response = await fetch(`${API_URL}/api/admin/orders/${returnItem.id}/toggle-reshipping`, {

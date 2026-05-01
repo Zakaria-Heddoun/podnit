@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import Image from "next/image";
 import Link from "next/link";
 
 export default function Navigation() {
@@ -7,7 +8,13 @@ export default function Navigation() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <img src="/images/logo/podnit.png" alt="Podnit" className="h-12" />
+          <Image
+            src="/images/logo/podnit.png"
+            alt="Podnit"
+            width={160}
+            height={48}
+            className="h-12 w-auto"
+          />
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">

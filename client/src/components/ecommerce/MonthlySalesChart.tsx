@@ -17,7 +17,7 @@ interface MonthlySalesChartProps {
 }
 
 export default function MonthlySalesChart({ userRole = 'seller' }: MonthlySalesChartProps) {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+  const API_URL = "";
   const [monthlySales, setMonthlySales] = useState<number[]>(Array(12).fill(0));
   const [dailySales, setDailySales] = useState<{ labels: string[], data: number[] }>({ labels: [], data: [] });
   const [viewType, setViewType] = useState<'monthly' | 'daily'>('monthly');

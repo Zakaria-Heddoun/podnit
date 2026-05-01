@@ -35,6 +35,7 @@ interface Transaction {
   bankName?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   bankDetails?: any;
+  receiptImage?: string;
 }
 
 // API Response interfaces
@@ -100,6 +101,8 @@ export default function AdminTransactions() {
   const [rejectTransaction, setRejectTransaction] = useState<Transaction | null>(null);
   const [selectedPaymentMethod] = useState<string>("All");
   const [dateFilter, setDateFilter] = useState<string>("All");
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
 
   const statuses = ["All", "PENDING", "VALIDATED", "REJECTED", "PROCESSED", "CANCELLED"];
   const types = ["All", "Deposit", "Withdrawal"];
@@ -130,6 +133,7 @@ export default function AdminTransactions() {
       adminNotes: deposit.admin_notes,
       referenceNumber: deposit.reference_number,
       bankName: deposit.bank_name,
+      receiptImage: deposit.receipt_image,
     };
   };
 
@@ -169,7 +173,7 @@ export default function AdminTransactions() {
       }
 
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
 
         // Fetch deposits and withdrawals simultaneously
         const [depositsResponse, withdrawalsResponse] = await Promise.all([
@@ -258,7 +262,7 @@ export default function AdminTransactions() {
     setApproveTransaction(null);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const endpoint = transaction.type === 'Deposit'
         ? `${API_URL}/api/admin/deposits/${transaction.id}`
         : `${API_URL}/api/admin/withdrawals/${transaction.id}`;
@@ -311,7 +315,7 @@ export default function AdminTransactions() {
     setRejectTransaction(null);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const endpoint = transaction.type === 'Deposit'
         ? `${API_URL}/api/admin/deposits/${transaction.id}`
         : `${API_URL}/api/admin/withdrawals/${transaction.id}`;
@@ -798,13 +802,17 @@ export default function AdminTransactions() {
                         </>
                       )}
 
-                      {(transaction.type === "Deposit" && transaction.status === "VALIDATED") && (
+                      {transaction.type === "Deposit" && transaction.receiptImage && (
                         <button
                           className="rounded-lg bg-blue-50 p-2 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30"
                           title="View Receipt"
+                          onClick={() => {
+                            setReceiptImage(`/storage/${transaction.receiptImage}`);
+                            setReceiptModalOpen(true);
+                          }}
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                         </button>
                       )}
@@ -837,6 +845,57 @@ export default function AdminTransactions() {
         cancelLabel="Cancel"
         variant="destructive"
       />
+
+      {/* Receipt Image Modal */}
+      {receiptModalOpen && receiptImage && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setReceiptModalOpen(false)}
+        >
+          <div
+            className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Payment Receipt</h3>
+              <button
+                onClick={() => setReceiptModalOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-800 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50">
+              <img
+                src={receiptImage}
+                alt="Payment Receipt"
+                className="w-full h-auto rounded-lg border border-gray-200 dark:border-gray-700"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <a
+                href={receiptImage}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Open Full Size
+              </a>
+              <button
+                onClick={() => setReceiptModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

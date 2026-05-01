@@ -20,7 +20,11 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertNoContent();
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'token',
+            'user' => ['id', 'email'],
+        ]);
     }
 
     public function test_users_can_not_authenticate_with_invalid_password(): void
@@ -39,9 +43,9 @@ class AuthenticationTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->post('/logout');
+        $response = $this->actingAs($user, 'sanctum')->post('/logout');
 
-        $this->assertGuest();
-        $response->assertNoContent();
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['message']);
     }
 }

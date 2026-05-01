@@ -5,25 +5,15 @@ import { WalletIcon } from "@/icons";
 interface WalletDisplayProps {
   balance?: number;
   points?: number;
-  currency?: string;
   className?: string;
 }
 
 const WalletDisplay: React.FC<WalletDisplayProps> = ({
   balance = 0,
   points = 0,
-  currency = "USD",
   className = "",
 }) => {
-  // Format the balance with proper currency formatting
-  const formatBalance = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
+  const formatBalance = (amount: number) => `${Number(amount).toFixed(2)} DH`;
 
   return (
     <div

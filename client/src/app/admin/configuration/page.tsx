@@ -42,7 +42,7 @@ export default function AdminConfiguration() {
     if (!token) return;
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const response = await fetch(`${API_URL}/api/admin/settings`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -54,16 +54,18 @@ export default function AdminConfiguration() {
         const result = await response.json();
         if (result.success && result.data) {
           const s = result.data;
+          const sf = (v: any, def: number) => { const n = parseFloat(v); return isNaN(n) ? def : n; };
+          const si = (v: any, def: number) => { const n = parseInt(v); return isNaN(n) ? def : n; };
           setGeneralSettings(prev => ({
             ...prev,
-            pointsPerOrder: parseInt(s.points_per_order?.value) || 10,
-            referralPointsReferrer: parseInt(s.referral_points_referrer?.value) || 100,
-            minDeposit: parseFloat(s.min_deposit_amount?.value) || 100,
-            minWithdrawal: parseFloat(s.min_withdrawal_amount?.value) || 50,
-            packagingPrice: parseFloat(s.packaging_price?.value) || 5.00,
-            shippingCasablanca: parseFloat(s.shipping_casablanca?.value) || 20.00,
-            shippingOther: parseFloat(s.shipping_other?.value) || 40.00,
-            deliveryPrice: parseFloat(s.delivery_price?.value) || 0,
+            pointsPerOrder: si(s.points_per_order?.value, 10),
+            referralPointsReferrer: si(s.referral_points_referrer?.value, 100),
+            minDeposit: sf(s.min_deposit_amount?.value, 100),
+            minWithdrawal: sf(s.min_withdrawal_amount?.value, 50),
+            packagingPrice: sf(s.packaging_price?.value, 5.00),
+            shippingCasablanca: sf(s.shipping_casablanca?.value, 20.00),
+            shippingOther: sf(s.shipping_other?.value, 40.00),
+            deliveryPrice: sf(s.delivery_price?.value, 0),
             siteName: s.site_name?.value || "PODNIT",
           }));
         }
@@ -82,8 +84,8 @@ export default function AdminConfiguration() {
     const token = localStorage.getItem("token");
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
-      const response = await fetch(`${API_URL}/api/admin/settings/bulk`, {
+      const API_URL = '';
+      const response = await fetch(`${API_URL}/api/admin/settings`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -131,7 +133,7 @@ export default function AdminConfiguration() {
     const token = localStorage.getItem("token");
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const response = await fetch(`${API_URL}/api/test-mail`, {
         method: "POST",
         headers: {

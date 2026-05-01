@@ -64,7 +64,7 @@ export default function SellerTemplates() {
     if (isNew && templateId) {
       (async () => {
         try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/seller/templates/${templateId}`, {
+          const response = await fetch(`/api/seller/templates/${templateId}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
           if (response.ok) {
@@ -134,7 +134,7 @@ export default function SellerTemplates() {
     setDeleteId(null);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/seller/templates/${id}`, {
+      const response = await fetch(`/api/seller/templates/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -266,8 +266,7 @@ export default function SellerTemplates() {
               key={template.id}
               onMouseEnter={() => setHoveredId(template.id)}
               onMouseLeave={() => setHoveredId(null)}
-              onClick={() => template.status === 'REJECTED' ? handleEdit(template, { stopPropagation: () => { } } as any) : null}
-              className={`relative overflow-hidden rounded-lg border bg-white shadow-default dark:bg-boxdark transition-all duration-300 ${template.status === 'REJECTED' ? 'border-red-500/50 cursor-pointer' : 'border-stroke dark:border-strokedark'}`}
+              className={`relative overflow-hidden rounded-lg border bg-white shadow-default dark:bg-boxdark transition-all duration-300 ${template.status === 'REJECTED' ? 'border-red-500/50' : 'border-stroke dark:border-strokedark'}`}
               style={{ height: '280px' }}
             >
               {/* Background image layer */}
@@ -342,8 +341,7 @@ export default function SellerTemplates() {
                 )}
                 {template.status === 'REJECTED' && template.admin_feedback && (
                   <div className="mt-1.5 p-2 bg-red-500/80 rounded text-xs text-white backdrop-blur-sm text-center">
-                    Reason: {template.admin_feedback}
-                    <div className="mt-1 font-bold underline">Click card to fix</div>
+                    <span className="font-semibold">Rejection reason:</span> {template.admin_feedback}
                   </div>
                 )}
                 <div className="mt-2 text-xs text-gray-300 text-right">

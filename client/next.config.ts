@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '100mb',
+    },
+  },
   images: {
     remotePatterns: [
       {
@@ -36,6 +41,14 @@ const nextConfig: NextConfig = {
       {
         source: '/api/:path*',
         destination: 'http://localhost:8000/api/:path*',
+      },
+      {
+        source: '/images/:path*',
+        destination: 'http://localhost:8000/images/:path*',
+      },
+      {
+        source: '/storage/:path*',
+        destination: 'http://localhost:8000/storage/:path*',
       },
     ];
   },

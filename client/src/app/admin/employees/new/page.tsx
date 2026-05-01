@@ -33,7 +33,7 @@ export default function NewEmployeePage() {
     setLoading(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const res = await fetch(`${API_URL}/api/admin/employees`, {
         method: "POST",
         headers: {
@@ -68,7 +68,7 @@ export default function NewEmployeePage() {
     (async () => {
       if (!token) return;
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         const res = await fetch(`${API_URL}/api/admin/roles`, {
           headers: {
             'Authorization': `Bearer ${token}`,

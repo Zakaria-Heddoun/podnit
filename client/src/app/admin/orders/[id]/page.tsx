@@ -88,6 +88,7 @@ interface OrderDetail {
     customer_phone?: string;
     tracking_number?: string;
     allow_reshipping?: boolean;
+    is_paid?: boolean;
 }
 
 export default function AdminOrderDetailPage() {
@@ -101,6 +102,8 @@ export default function AdminOrderDetailPage() {
 
     const [trackingData, setTrackingData] = useState<any[] | null>(null);
     const [shipConfirmOpen, setShipConfirmOpen] = useState(false);
+    const [returnConfirmOpen, setReturnConfirmOpen] = useState(false);
+    const [returnLoading, setReturnLoading] = useState(false);
 
     // Re-rendered design images per group (same fix as Admin Review Template)
     const [renderedImages, setRenderedImages] = useState<Record<string, Record<string, string>>>({});
@@ -163,7 +166,7 @@ export default function AdminOrderDetailPage() {
                 savedDimensions?: { width: number; height: number } | null;
             }[] = [];
             const assets: { url: string; type: string }[] = [];
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            const API_URL = '';
 
             // 1. Process Mockups with design compositing (same fix as Admin Review Template)
             if (group.designConfig) {
@@ -282,7 +285,7 @@ export default function AdminOrderDetailPage() {
         const renderAll = async () => {
             setRenderingImages(true);
             const results: Record<string, Record<string, string>> = {};
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            const API_URL = '';
             const token = localStorage.getItem('token');
 
             for (const group of groupsWithTemplates) {
@@ -445,7 +448,7 @@ export default function AdminOrderDetailPage() {
 
         const fetchTracking = async () => {
             try {
-                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+                const API_URL = '';
                 const token = localStorage.getItem('token');
                 const res = await fetch(`${API_URL}/api/admin/orders/${order.id}/track`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -468,7 +471,7 @@ export default function AdminOrderDetailPage() {
             setLoading(true);
 
             try {
-                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+                const API_URL = '';
                 const token = localStorage.getItem('token');
 
                 const response = await fetch(`${API_URL}/api/admin/orders/${orderId}`, {
@@ -517,7 +520,7 @@ export default function AdminOrderDetailPage() {
         setShipConfirmOpen(false);
         setShippingLoading(true);
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            const API_URL = '';
             const token = localStorage.getItem('token');
 
             const response = await fetch(`${API_URL}/api/admin/orders/${order.id}/ship`, {
@@ -532,12 +535,12 @@ export default function AdminOrderDetailPage() {
             const result = await response.json();
 
             if (response.ok) {
-                toast.success(`Order shipped successfully! Tracking Code: ${result.data?.code_shippment || 'N/A'}`);
-                // Update local state
+                const blRef = result.data?.bl_ref || 'N/A';
+                toast.success(`Order shipped! OZON BL Ref: ${blRef}`);
                 setOrder(prev => prev ? ({
                     ...prev,
                     status: 'PRINTED',
-                    // tracking_number: result.data?.code_shippment // Add to types if needed, but status update is key
+                    tracking_number: result.data?.bl_ref,
                 }) : null);
             } else {
                 // Better error message parsing
@@ -575,7 +578,7 @@ export default function AdminOrderDetailPage() {
         if (!order) return;
         setLoading(true); // Using main loading state or create a new one
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            const API_URL = '';
             const token = localStorage.getItem('token');
 
             const response = await fetch(`${API_URL}/api/admin/orders/${order.id}/toggle-reshipping`, {
@@ -598,6 +601,34 @@ export default function AdminOrderDetailPage() {
             toast.error('Error updating status');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleMarkAsReturnedConfirm = async () => {
+        if (!order) return;
+        setReturnConfirmOpen(false);
+        setReturnLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`/api/admin/orders/${order.id}/mark-returned`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                toast.success('Order marked as returned');
+                setOrder(prev => prev ? { ...prev, status: 'RETURNED' } : null);
+            } else {
+                toast.error(result.error || 'Failed to mark as returned');
+            }
+        } catch {
+            toast.error('An error occurred');
+        } finally {
+            setReturnLoading(false);
         }
     };
 
@@ -648,9 +679,14 @@ export default function AdminOrderDetailPage() {
                         </p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                        <Badge size="md" color={getStatusColor(order.status)}>
-                            {order.status}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                            <Badge size="md" color={order.is_paid ? 'success' : 'error'}>
+                                {order.is_paid ? 'PAID' : 'UNPAID'}
+                            </Badge>
+                            <Badge size="md" color={getStatusColor(order.status)}>
+                                {order.status}
+                            </Badge>
+                        </div>
                         {/* Reorder Approval Button - Only for returned orders */}
                         {isReturnStatus(order.status) && (
                             <button
@@ -946,11 +982,22 @@ export default function AdminOrderDetailPage() {
                 open={shipConfirmOpen}
                 onClose={() => setShipConfirmOpen(false)}
                 onConfirm={handleShipOrderConfirm}
-                title="Ship Order"
-                message="Are you sure you want to create a parcel in EliteSpeed for this order?"
+                title="Ship Order via OZON"
+                message="This will create a Bon de Livraison (BL) on OZON Express for this order. Continue?"
                 confirmLabel="Ship"
                 cancelLabel="Cancel"
                 isLoading={shippingLoading}
+            />
+
+            <ConfirmDialog
+                open={returnConfirmOpen}
+                onClose={() => setReturnConfirmOpen(false)}
+                onConfirm={handleMarkAsReturnedConfirm}
+                title="Mark as Returned"
+                message="Are you sure you want to mark this order as returned? This action will set the status to RETURNED."
+                confirmLabel="Mark as Returned"
+                cancelLabel="Cancel"
+                isLoading={returnLoading}
             />
 
             {/* Actions */}
@@ -961,6 +1008,15 @@ export default function AdminOrderDetailPage() {
                 >
                     Back to Orders
                 </Button>
+                {order.status !== 'RETURNED' && order.status !== 'CANCELLED' && (
+                    <Button
+                        onClick={() => setReturnConfirmOpen(true)}
+                        disabled={returnLoading}
+                        className="bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                        {returnLoading ? 'Processing...' : 'Mark as Returned'}
+                    </Button>
+                )}
                 <Button
                     onClick={handleShipOrderClick}
                     disabled={shippingLoading || isOrderShipped(order.status)}
@@ -971,7 +1027,7 @@ export default function AdminOrderDetailPage() {
                 >
                     {shippingLoading ? 'Shipping...' : (
                         isOrderShipped(order.status)
-                            ? (order.tracking_number ? `Shipped (${order.tracking_number})` : 'Order Shipped')
+                            ? (order.tracking_number ? `Shipped (BL: ${order.tracking_number})` : 'Order Shipped')
                             : 'Ship & Print Label'
                     )}
                 </Button>

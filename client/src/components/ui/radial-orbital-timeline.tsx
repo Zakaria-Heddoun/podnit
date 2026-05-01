@@ -26,14 +26,11 @@ export default function RadialOrbitalTimeline({
   const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>(
     {}
   );
-  const [viewMode, setViewMode] = useState<"orbital">("orbital");
+  const viewMode = "orbital";
   const [rotationAngle, setRotationAngle] = useState<number>(0);
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
   const [pulseEffect, setPulseEffect] = useState<Record<number, boolean>>({});
-  const [centerOffset, setCenterOffset] = useState<{ x: number; y: number }>({
-    x: 0,
-    y: 0,
-  });
+  const centerOffset = { x: 0, y: 0 };
   const [activeNodeId, setActiveNodeId] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<HTMLDivElement>(null);
@@ -136,19 +133,6 @@ export default function RadialOrbitalTimeline({
     if (!activeNodeId) return false;
     const relatedItems = getRelatedItems(activeNodeId);
     return relatedItems.includes(itemId);
-  };
-
-  const getStatusStyles = (status: TimelineItem["status"]): string => {
-    switch (status) {
-      case "completed":
-        return "text-primary-foreground bg-primary border-primary";
-      case "in-progress":
-        return "text-accent-foreground bg-accent border-accent";
-      case "pending":
-        return "text-muted-foreground bg-muted border-border";
-      default:
-        return "text-muted-foreground bg-muted border-border";
-    }
   };
 
   return (

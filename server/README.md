@@ -43,10 +43,20 @@ A Laravel-based backend API with role-based authentication system for the Podnit
 
 The server will be available at `http://127.0.0.1:8000`
 
+### Fixing 413 (Content Too Large) when adding products
+
+Product creation sends multipart/form-data with images; if the request is rejected with **413 Content Too Large**, increase limits:
+
+- **Nginx** (in your `server` block or `http` block):
+  ```nginx
+  client_max_body_size 80M;
+  ```
+- **PHP**: `public/.user.ini` is already set to `upload_max_filesize = 64M` and `post_max_size = 80M`. If your host ignores `.user.ini`, set the same in `php.ini` or your PHP-FPM pool config.
+
 ## Default Admin User
 
 - **Email**: admin@podnit.com
-- **Password**: admin123
+- **Password**: @admin@1
 - **Role**: admin
 
 ## API Endpoints

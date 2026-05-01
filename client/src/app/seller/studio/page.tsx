@@ -83,7 +83,7 @@ function StudioContent() {
     const fetchProductColors = async (id: string) => {
       setIsProductLoading(true);
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_URL}/api/seller/products/${id}`, {
           headers: {
@@ -288,7 +288,7 @@ function StudioContent() {
             
             // If URL is from backend API, use proxy to avoid CORS
             let finalUrl = url;
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            const API_URL = '';
             if (url.startsWith(API_URL) && label === 'Mockup') {
               finalUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
             }

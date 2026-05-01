@@ -12,6 +12,30 @@ type State = {
   error?: Error | null;
 };
 
+const isReloadableAssetError = (value: unknown): boolean => {
+  const message = String(value ?? '').toLowerCase();
+  return message.includes('chunkloaderror')
+    || message.includes('loading chunk')
+    || message.includes('failed to fetch dynamically imported module')
+    || message.includes('returnnan is not defined');
+};
+
+const forceAssetReload = () => {
+  if (typeof window === 'undefined') return;
+
+  const key = 'podnit-error-boundary-reload';
+  const alreadyReloaded = sessionStorage.getItem(key) === '1';
+  if (alreadyReloaded) {
+    sessionStorage.removeItem(key);
+    return;
+  }
+
+  sessionStorage.setItem(key, '1');
+  const url = new URL(window.location.href);
+  url.searchParams.set('_recover', Date.now().toString());
+  window.location.replace(url.toString());
+};
+
 export default class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -25,6 +49,10 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   componentDidCatch(error: Error, info: any) {
     // You can send error info to analytics here
     console.error("ErrorBoundary captured error:", error, info);
+    if (isReloadableAssetError(error)) {
+      forceAssetReload();
+      return;
+    }
     if (typeof window !== "undefined") {
       (window as any).__LAST_CLIENT_ERROR = { error: String(error), info };
       // show a simple alert in case toasts fail so user sees immediate feedback
@@ -44,12 +72,20 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
     this._onError = (event: ErrorEvent) => {
       console.error('Global error caught:', event.error || event.message, event);
+      if (isReloadableAssetError(event.error || event.message)) {
+        forceAssetReload();
+        return;
+      }
       (window as any).__LAST_CLIENT_ERROR = { error: String(event.error || event.message), info: event }; 
       this.setState({ hasError: true, error: event.error || new Error(String(event.message || 'Unknown error')) });
     };
 
     this._onRejection = (event: PromiseRejectionEvent) => {
       console.error('Unhandled rejection:', event.reason);
+      if (isReloadableAssetError(event.reason)) {
+        forceAssetReload();
+        return;
+      }
       (window as any).__LAST_CLIENT_ERROR = { error: String(event.reason), info: event };
       this.setState({ hasError: true, error: event.reason instanceof Error ? event.reason : new Error(String(event.reason)) });
     };
@@ -69,7 +105,6 @@ export default class ErrorBoundary extends React.Component<Props, State> {
       return (
         <div className="min-h-screen flex items-center justify-center p-6">
           <div className="text-center">
-            <img src="/images/blank-error.png" alt="App Error" className="mx-auto mb-4 max-w-xs" />
             <h1 className="text-xl font-semibold mb-2">Something went wrong</h1>
             <p className="text-gray-600">A client-side error occurred while loading the app. Please try refreshing or contact support.</p>
           </div>

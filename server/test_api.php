@@ -44,10 +44,14 @@ echo "Response: " . json_encode($response['body'], JSON_PRETTY_PRINT) . "\n\n";
 echo "2. Testing Seller Registration...\n";
 $uniqueEmail = 'seller' . time() . '@test.com';
 $sellerData = [
-    'name' => 'Test Seller',
+    'first_name' => 'Test',
+    'last_name' => 'Seller',
     'email' => $uniqueEmail,
     'password' => 'password123',
-    'password_confirmation' => 'password123'
+    'password_confirmation' => 'password123',
+    'phone' => '1234567890',
+    'bank_name' => 'Test Bank',
+    'rib' => '12345678901234567890' . rand(1000, 9999)
 ];
 $response = makeRequest($baseUrl . '/register', 'POST', $sellerData);
 echo "Status: " . $response['status'] . "\n";
@@ -57,7 +61,7 @@ echo "Response: " . json_encode($response['body'], JSON_PRETTY_PRINT) . "\n\n";
 echo "3. Testing Admin Login...\n";
 $adminLogin = [
     'email' => 'admin@podnit.com',
-    'password' => 'admin123'
+    'password' => '@admin@1'
 ];
 $response = makeRequest($baseUrl . '/login', 'POST', $adminLogin);
 echo "Status: " . $response['status'] . "\n";

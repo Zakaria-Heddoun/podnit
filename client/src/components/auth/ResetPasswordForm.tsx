@@ -47,7 +47,7 @@ export default function ResetPasswordForm() {
     setLoading(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const response = await fetch(`${API_URL}/api/reset-password`, {
         method: 'POST',
         headers: {

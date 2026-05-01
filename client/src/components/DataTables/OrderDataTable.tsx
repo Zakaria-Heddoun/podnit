@@ -15,6 +15,7 @@ interface OrderDataTableProps {
   onEdit?: (item: Order) => void;
   onDelete?: (item: Order) => void;
   onDownload?: () => void;
+  onMarkAsReturned?: (item: Order) => void;
 }
 
 const OrderDataTable: React.FC<OrderDataTableProps> = ({
@@ -26,7 +27,8 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
   onBulkAction,
   onEdit,
   onDelete,
-  onDownload
+  onDownload,
+  onMarkAsReturned,
 }) => {
   const [search, setSearch] = useState("");
   const [sortColumn, setSortColumn] = useState("date");
@@ -260,9 +262,14 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Amount</p>
                 </div>
               </div>
-              <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+              <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                 <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("status")}>
                   <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Status</p>
+                </div>
+              </div>
+              <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+                <div className="flex w-full cursor-pointer items-center justify-between" onClick={() => sortBy("isPaid")}>
+                  <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Paid</p>
                 </div>
               </div>
               <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
@@ -309,9 +316,18 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                 <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                   <p className="text-theme-sm font-medium text-gray-900 dark:text-white">{order.amount} DH</p>
                 </div>
-                <div className="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+                <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
                   <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getStatusColor(order.status)}`}>
                     {order.status}
+                  </span>
+                </div>
+                <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+                  <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
+                    order.isPaid 
+                      ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-400' 
+                      : 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-400'
+                  }`}>
+                    {order.isPaid ? 'Paid' : 'Unpaid'}
                   </span>
                 </div>
                 <div className="col-span-1 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
@@ -329,6 +345,17 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
                     </button>
+                    {onMarkAsReturned && order.status !== 'RETURNED' && order.status !== 'CANCELLED' && (
+                      <button
+                        onClick={() => onMarkAsReturned(order)}
+                        className="text-orange-600 hover:text-orange-900 dark:text-orange-400 dark:hover:text-orange-300"
+                        title="Mark as Returned"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -391,6 +418,16 @@ const OrderDataTable: React.FC<OrderDataTableProps> = ({
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Status:</span>
                     <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusColor(order.status)}`}>
                       {order.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Payment:</span>
+                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                      order.isPaid 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-400' 
+                        : 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-400'
+                    }`}>
+                      {order.isPaid ? 'Paid' : 'Unpaid'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">

@@ -20,7 +20,7 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
         
         // Load role relationship if user has a role_id
-        if ($user->role_id) {
+        if ($user->role_id && method_exists($user, 'roleRelation')) {
             $user->load('roleRelation');
         }
         
@@ -28,19 +28,18 @@ class AuthenticatedSessionController extends Controller
         $token = $user->createToken('api-token')->plainTextToken;
         
         // Determine redirect URL based on role
-        $redirectUrl = '/dashboard';
-        if ($user->isAdmin()) {
+        $redirectUrl = '/';
+        if ($user->role === 'admin') {
             $redirectUrl = '/admin';
-        } elseif ($user->isSeller()) {
+        } elseif ($user->role === 'seller') {
             $redirectUrl = '/seller/dashboard';
-        } elseif ($user->role_id) {
-            // Employee with custom role - redirect to employee dashboard
+        } elseif ($user->role === 'employee') {
             $redirectUrl = '/employee/dashboard';
         }
         
         // Get permissions if user has a role
         $permissions = [];
-        if ($user->roleRelation) {
+        if (method_exists($user, 'roleRelation') && $user->roleRelation) {
             $permissions = $user->roleRelation->permissions ?? [];
         }
         

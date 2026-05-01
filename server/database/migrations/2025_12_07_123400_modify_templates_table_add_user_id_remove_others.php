@@ -12,11 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('templates', function (Blueprint $table) {
-            // Drop index for seller_id first for SQLite compatibility
-            $table->dropIndex(['seller_id']);
-            
-            // Drop foreign key for seller_id
+            // Drop foreign key for seller_id first
             $table->dropForeign(['seller_id']);
+
+            // Drop index for seller_id (if exists, but dropping foreign key usually handles it or makes it droppable)
+            // In MySQL, sometimes index is needed for foreign key.
+            // $table->dropIndex(['seller_id']);
             
             // Drop columns
             $table->dropColumn(['seller_id', 'price', 'sizes']);

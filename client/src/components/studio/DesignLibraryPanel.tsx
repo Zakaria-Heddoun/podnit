@@ -52,13 +52,22 @@ export function DesignLibraryPanel({ open, onClose, onSelect }: DesignLibraryPan
   }, [open]);
 
   const handleSelect = async (asset: DesignAsset) => {
-    const fullUrl = getImageUrl(asset.image_url || asset.image_path);
-    const proxyPath = `/image-proxy?url=${encodeURIComponent(fullUrl)}`;
-    const proxyUrl = typeof window !== 'undefined' ? `${window.location.origin}${proxyPath}` : proxyPath;
+    const imageUrl = getImageUrl(asset.image_url || asset.image_path);
+
+    // For relative paths (same origin), fetch directly — no proxy needed.
+    // For absolute URLs, use the image-proxy to avoid CORS issues.
+    const isRelative = imageUrl.startsWith("/");
+    const fetchUrl = isRelative
+      ? imageUrl
+      : `/image-proxy?url=${encodeURIComponent(imageUrl)}`;
 
     setSelectingId(asset.id);
     try {
-      const res = await fetch(proxyUrl);
+      const token = localStorage.getItem("token");
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(fetchUrl, { headers });
       if (!res.ok) {
         throw new Error(`Image load failed: ${res.status}`);
       }

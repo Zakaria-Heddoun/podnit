@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { Toaster } from "@/components/ui/sonner";
 import ErrorBoundary from '@/components/ErrorBoundary';
+import ChunkErrorHandler from './ChunkErrorHandler';
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -82,6 +83,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${outfit.className} dark:bg-gray-900`} suppressHydrationWarning>
+        <ChunkErrorHandler />
         <AuthProvider>
           <ThemeProvider>
             <SidebarProvider>

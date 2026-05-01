@@ -78,7 +78,7 @@ const MockupView: React.FC<MockupViewProps> = ({
         if (templateId && viewKey) {
             try {
                 const token = localStorage.getItem('token');
-                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+                const API_URL = '';
                 const res = await fetch(`${API_URL}/api/admin/templates/${templateId}/view-override`, {
                     method: 'PUT',
                     headers: {

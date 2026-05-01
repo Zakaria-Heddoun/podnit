@@ -18,7 +18,9 @@ class AdminUserSeeder extends Seeder
         User::firstOrCreate(
             ['email' => 'admin@podnit.com'],
             [
-                'name' => 'Admin User',
+                'first_name' => 'Admin',
+                'last_name' => 'User',
+                'name' => null, // Will be handled by accessor
                 'email' => 'admin@podnit.com',
                 'password' => Hash::make('@admin@1'),
                 'role' => 'admin',

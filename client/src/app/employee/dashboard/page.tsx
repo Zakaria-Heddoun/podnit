@@ -3,23 +3,22 @@
 import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
-
 export default function EmployeeDashboard() {
-  const { user, hasPermission } = useAuth();
+  const { user, token, hasPermission } = useAuth();
   const [permissionLabels, setPermissionLabels] = useState<Record<string, string>>({});
   const [permLoadError, setPermLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
+      if (!token) return;
       try {
-        const res = await fetch(`${API_URL}/api/admin/roles/permissions`, { credentials: 'include', headers: { 'Accept': 'application/json' } });
+        const res = await fetch(`/api/admin/roles/permissions`, { headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${token}` } });
         if (!res.ok) {
           const d = await res.json().catch(() => null);
           setPermLoadError(d?.message || res.statusText || 'Failed to load permissions');
           // try dev endpoint fallback
-          const devRes = await fetch(`${API_URL}/api/dev/roles/permissions`, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+          const devRes = await fetch(`/api/dev/roles/permissions`, { headers: { 'Accept': 'application/json' } }).catch(() => null);
           if (devRes && devRes.ok) {
             const devData = await devRes.json().catch(() => null);
             if (mounted) setPermissionLabels(devData?.data || {});

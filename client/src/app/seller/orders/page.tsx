@@ -8,6 +8,8 @@ import { Order } from "@/types/datatable";
 import { useAuth } from "@/context/AuthContext";
 import { getOrderStatusBadgeColor } from "@/lib/orderStatus";
 
+type OrderStatus = string;
+
 interface OrderApiResponse {
   id: number;
   order_number: string;
@@ -31,6 +33,7 @@ interface OrderApiResponse {
   selling_price?: number;
   total_amount: number;
   status: OrderStatus;
+  is_paid: boolean;
   customization: {
     color: string;
     size: string;
@@ -75,6 +78,7 @@ export default function SellerOrders() {
       product: apiOrder.product?.name || 'Unknown Product',
       amount: apiOrder.total_amount,
       status: apiOrder.status as any,
+      isPaid: apiOrder.is_paid,
       date: new Date(apiOrder.created_at).toLocaleDateString(),
       trackingNumber: apiOrder.tracking_number,
       paymentMethod: undefined // Not available from API
@@ -93,7 +97,7 @@ export default function SellerOrders() {
       setLoading(true);
 
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         const token = localStorage.getItem('token');
 
         // Fetch orders from authenticated seller endpoint
@@ -198,6 +202,32 @@ export default function SellerOrders() {
 
   const handleViewDetails = (order: Order) => {
     window.location.href = `/seller/orders/${order.id}`;
+  };
+
+  const handleMarkAsReturned = async (order: Order) => {
+    if (!window.confirm(`Mark order ${order.orderNumber} as RETURNED?`)) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/seller/orders/${order.id}/mark-returned`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      if (response.ok) {
+        toast.success(`Order ${order.orderNumber} marked as returned`);
+        setOrders(prev =>
+          prev.map(o => o.id === order.id ? { ...o, status: 'RETURNED' as any } : o)
+        );
+      } else {
+        const result = await response.json();
+        toast.error(result.error || 'Failed to mark as returned');
+      }
+    } catch {
+      toast.error('An error occurred');
+    }
   };
 
   const handleDownload = () => {
@@ -322,6 +352,7 @@ export default function SellerOrders() {
         onSelectionChange={handleSelectionChange}
         onBulkAction={handleBulkAction}
         onEdit={handleViewDetails}
+        onMarkAsReturned={handleMarkAsReturned}
         onDownload={handleDownload}
       />
     </div>

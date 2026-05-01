@@ -24,43 +24,28 @@ class Order extends Model
         'total_amount',
         'status',
         'shipping_status',
+        'seller_paid_at',
+        'is_paid',
         'allow_reshipping',
         'shipping_address',
         'tracking_number',
         'is_reordered',
         'reordered_from_id',
+        // Manual return metadata
+        'returned_by',
+        'returned_at',
+        'return_notes',
     ];
-
-    /**
-     * List of statuses that trigger return handling
-     */
-    /**
-     * Statuses from the delivery API that indicate a return.
-     * These are the raw EliteSpeed statuses that mean the order is returned.
-     */
-    public const RETURN_STATUSES = [
-        "En voyage",
-        "hors zone",
-        "Annuler",
-        "Refusé",
-    ];
-
-    public function isReturnStatus(): bool
-    {
-        foreach (self::RETURN_STATUSES as $returnStatus) {
-            if (stripos($this->status, $returnStatus) !== false || stripos($this->shipping_status, $returnStatus) !== false) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     protected $casts = [
         'customization' => 'array',
-        'unit_price' => 'decimal:2',
+        'unit_price'    => 'decimal:2',
         'selling_price' => 'decimal:2',
-        'total_amount' => 'decimal:2',
+        'total_amount'  => 'decimal:2',
         'shipping_address' => 'array',
+        'seller_paid_at'   => 'datetime',
+        'returned_at'      => 'datetime',
+        'is_paid'          => 'boolean',
     ];
 
     public function user(): BelongsTo

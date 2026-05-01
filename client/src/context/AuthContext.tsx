@@ -1,7 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getApiUrl } from '@/lib/utils';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 interface User {
   id: number;
@@ -16,7 +15,6 @@ interface User {
   brand_name?: string;
   // Seller-specific fields
   cin?: string;
-  account_holder?: string;
   bank_name?: string;
   rib?: string;
   balance?: number;
@@ -46,8 +44,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = '/api';
-const API_URL = getApiUrl();
+const API_BASE = '/api';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -63,14 +60,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Fetch fresh user data from the database
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     const currentToken = token || localStorage.getItem('token');
     if (!currentToken) {
       return;
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/user`, {
+      const response = await fetch(`${API_BASE}/user`, {
         headers: {
           'Authorization': `Bearer ${currentToken}`,
           'Accept': 'application/json',
@@ -80,9 +77,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         const result = await response.json();
-        if (result.data) {
-          setUser(result.data);
-          localStorage.setItem('user', JSON.stringify(result.data));
+        // API returns either { data: user } or the user object directly
+        const userData = result.data ?? result;
+        if (userData?.id) {
+          setUser(userData);
+          localStorage.setItem('user', JSON.stringify(userData));
         }
       } else if (response.status === 401) {
         // Token is invalid, clear auth state
@@ -91,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Failed to fetch user data:', error);
     }
-  };
+  }, [token]);
 
   // Check authentication status on mount
   useEffect(() => {
@@ -112,11 +111,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(false);
-  }, []);
+  }, [fetchUserData]);
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/signin`, {
+      const response = await fetch(`${API_BASE}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -138,8 +137,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userData);
 
         let finalRedirect = redirect_url;
-        if (userData.role_id && userData.role !== 'admin' && userData.role !== 'seller') {
-          finalRedirect = '/admin';
+        if (userData.role === 'employee') {
+          finalRedirect = '/employee/dashboard';
         }
 
         return { success: true, redirect_url: finalRedirect };
@@ -169,7 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = !!user && !!token;
   const isAdmin = user?.role === 'admin';
   const isSeller = user?.role === 'seller';
-  const isEmployee = !!user?.role_id && user?.role !== 'admin' && user?.role !== 'seller';
+  const isEmployee = user?.role === 'employee';
   const isVerified = user?.is_verified ?? false;
 
   // Check if user has a specific permission

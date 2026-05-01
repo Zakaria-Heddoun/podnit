@@ -38,7 +38,7 @@ export default function NewRolePage() {
 
     setLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -67,7 +67,7 @@ export default function NewRolePage() {
     (async () => {
       if (!token) return;
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         const headers = {
           'Accept': 'application/json',
           'Authorization': `Bearer ${token}`

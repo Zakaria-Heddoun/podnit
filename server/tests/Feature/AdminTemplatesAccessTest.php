@@ -22,6 +22,7 @@ class AdminTemplatesAccessTest extends TestCase
         $seller = User::factory()->create(['role' => 'seller']);
         $product = Product::create([
             'name' => 'Test Product',
+            'category' => 'Apparel',
             'base_price' => 10.00,
             'views' => [['key' => 'front', 'price' => 0]],
         ]);
@@ -54,6 +55,7 @@ class AdminTemplatesAccessTest extends TestCase
         $seller = User::factory()->create(['role' => 'seller']);
         $product = Product::create([
             'name' => 'Test Product',
+            'category' => 'Apparel',
             'base_price' => 10.00,
             'views' => [['key' => 'front', 'price' => 0]],
         ]);

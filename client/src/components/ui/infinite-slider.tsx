@@ -8,7 +8,6 @@ type InfiniteSliderProps = {
   children: React.ReactNode;
   gap?: number;
   duration?: number;
-  durationOnHover?: number;
   direction?: 'horizontal' | 'vertical';
   reverse?: boolean;
   className?: string;
@@ -19,7 +18,6 @@ export function InfiniteSlider({
   children,
   gap = 16,
   duration = 25,
-  durationOnHover,
   direction = 'horizontal',
   reverse = false,
   className,

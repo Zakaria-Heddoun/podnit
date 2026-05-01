@@ -16,6 +16,22 @@ class TemplateSeeder extends Seeder
     {
         // Get all sellers
         $sellers = User::where('role', 'seller')->get();
+
+        if ($sellers->isEmpty()) {
+            // Create a default seller if none exist (fallback)
+            $this->command->info('No sellers found. Creating a default test seller...');
+            $seller = User::factory()->create([
+                'first_name' => 'Test',
+                'last_name' => 'Seller',
+                'name' => null,
+                'email' => 'seller@podnit.com',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => 'seller',
+                'is_active' => true,
+            ]);
+            $sellers = collect([$seller]);
+        }
+        
         $products = Product::where('is_active', true)->take(3)->get();
 
         if ($products->isEmpty()) {

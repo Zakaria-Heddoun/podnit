@@ -34,7 +34,7 @@ export default function EmployeeOrdersPage() {
 
       setLoading(true);
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+        const API_URL = '';
         const response = await fetch(`${API_URL}/api/admin/orders`, {
           headers: {
             'Accept': 'application/json',
@@ -98,7 +98,7 @@ export default function EmployeeOrdersPage() {
                     <td className="px-4 py-3">{order.total_amount?.toFixed(2) || '0.00'} DH</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 text-xs rounded ${
-                        order.status === 'PAID' || order.status === 'SHIPPED' 
+                        order.status === 'PAID' || order.status === 'SHIPPED'
                           ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                           : order.status === 'CANCELLED'
                           ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
@@ -120,5 +120,3 @@ export default function EmployeeOrdersPage() {
     </div>
   );
 }
-
-

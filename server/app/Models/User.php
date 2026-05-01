@@ -2,16 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Notifications\ResetPassword as ResetPasswordNotification;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -19,30 +18,28 @@ class User extends Authenticatable
      * @var array<int, string>
      */
     protected $fillable = [
+        'first_name',
+        'last_name',
         'name',
         'email',
         'password',
-        'role',
-        'role_id',
-        'brand_name',
         'phone',
+        'brand_name',
         'cin',
-        'account_holder',
         'bank_name',
         'rib',
+        'role',
+        'is_active',
         'balance',
         'points',
+        'referred_by',
         'referral_code',
-        'referred_by_id',
-        'is_verified',
-        'is_active',
-        'avatar',
     ];
 
     /**
      * The attributes that should be hidden for serialization.
      *
-     * @var list<string>
+     * @var array<int, string>
      */
     protected $hidden = [
         'password',
@@ -50,114 +47,93 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the attributes that should be cast.
+     * The attributes that should be cast.
      *
-     * @return array<string, string>
+     * @var array<string, string>
      */
-    protected function casts(): array
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'is_active' => 'boolean',
+        'balance' => 'decimal:2',
+        'points' => 'integer',
+    ];
+
+    /**
+     * The accessors to append to the model's array form.
+     */
+    protected $appends = ['is_verified'];
+
+    /**
+     * Alias is_active as is_verified for frontend compatibility.
+     */
+    public function getIsVerifiedAttribute(): bool
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'balance' => 'decimal:2',
-            'is_verified' => 'boolean',
-            'is_active' => 'boolean',
-        ];
+        return (bool) $this->is_active;
     }
 
-    // Seller relationships
-    public function referredBy()
+    /**
+     * Get the user's full name.
+     *
+     * @param  string|null  $value
+     * @return string
+     */
+    public function getNameAttribute(?string $value): string
     {
-        return $this->belongsTo(User::class, 'referred_by_id');
+        if ($value) {
+            return $value;
+        }
+        return trim(($this->first_name ?? '') . ' ' . ($this->last_name ?? ''));
     }
 
-    public function referrals()
+    /**
+     * Check if the user has a specific role.
+     *
+     * @param  string  $role
+     * @return bool
+     */
+    public function hasRole(string $role): bool
     {
-        return $this->hasMany(User::class, 'referred_by_id');
+        return $this->role === $role;
     }
 
-    // Orders relationship (for sellers)
-    public function sellerOrders()
-    {
-        return $this->hasMany(Order::class, 'seller_id');
-    }
-
-    // Helper methods
-    public function isSeller(): bool
-    {
-        return $this->role === 'seller';
-    }
-
-    public function isAdmin(): bool
-    {
-        return $this->role === 'admin';
-    }
-
-    public function templates()
-    {
-        return $this->hasMany(Template::class);
-    }
-
+    /**
+     * Get the role associated with the user.
+     */
     public function roleRelation()
     {
         return $this->belongsTo(Role::class, 'role_id');
     }
 
     /**
-     * Check whether the user has a given permission key.
+     * Check if the user is an admin.
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Check if the user is a seller.
+     */
+    public function isSeller(): bool
+    {
+        return $this->role === 'seller';
+    }
+
+    /**
+     * Check if the user has a specific permission.
      */
     public function hasPermission(string $permission): bool
     {
-        // Admin string role has everything
         if ($this->isAdmin()) {
             return true;
         }
 
-        // Check attached role model
-        if ($this->roleRelation) {
-            $perms = $this->roleRelation->permissions ?? [];
-            if (is_array($perms) && in_array($permission, $perms, true)) {
-                return true;
-            }
+        if (!$this->roleRelation) {
+            return false;
         }
 
-        // Fallback: if legacy role string maps to broad permissions
-        // (optional) - keep simple: no permission
-        return false;
-    }
-
-    /**
-     * Generate a unique referral code for the user
-     */
-    public static function generateUniqueReferralCode(): string
-    {
-        do {
-            // Generate a 6-character alphanumeric referral code
-            $code = strtoupper(\Illuminate\Support\Str::random(6));
-        } while (self::where('referral_code', $code)->exists());
-
-        return $code;
-    }
-
-    /**
-     * Ensure the user has a referral code (generate if missing)
-     */
-    public function ensureReferralCode(): void
-    {
-        if (empty($this->referral_code) && $this->isSeller()) {
-            $this->referral_code = self::generateUniqueReferralCode();
-            $this->save();
-        }
-    }
-
-    /**
-     * Send the password reset notification.
-     *
-     * @param  string  $token
-     * @return void
-     */
-    public function sendPasswordResetNotification($token)
-    {
-        $this->notify(new ResetPasswordNotification($token));
+        $permissions = $this->roleRelation->permissions ?? [];
+        return is_array($permissions) && in_array($permission, $permissions);
     }
 }

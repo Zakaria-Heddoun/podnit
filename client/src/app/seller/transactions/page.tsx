@@ -19,7 +19,7 @@ import WithdrawalModal from '@/components/common/WithdrawalModal';
 import PointsExchangeModal from '@/components/common/PointsExchangeModal';
 import { useAuth } from '@/context/AuthContext';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+const API_URL = '';
 
 interface Transaction {
   id: number;
@@ -38,13 +38,15 @@ interface BankDetails {
   CIH: {
     bank_name: string;
     rib: string;
-    account_holder: string;
+    first_name: string;
+    last_name: string;
     swift: string;
   };
   ATTIJARI: {
     bank_name: string;
     rib: string;
-    account_holder: string;
+    first_name: string;
+    last_name: string;
     swift: string;
   };
 }
@@ -142,7 +144,8 @@ const TransactionsPage = () => {
       
       if (response.ok) {
         const data = await response.json();
-        setUserBalance(data.data.balance || 0);
+        const userData = data.data ?? data;
+        setUserBalance(userData.balance || 0);
         
         // Also update AuthContext to keep header wallet in sync
         await fetchUserData();

@@ -28,17 +28,17 @@ export default function SignInForm() {
     if (token && user) {
       try {
         const userData = JSON.parse(user);
-        let redirectUrl = '/dashboard';
+        let redirectUrl = '/';
         if (userData.role === 'admin') {
           redirectUrl = '/admin';
         } else if (userData.role === 'seller') {
           redirectUrl = '/seller/dashboard';
-        } else if (userData.role_id) {
+        } else if (userData.role === 'employee') {
           redirectUrl = '/employee/dashboard';
         }
         router.push(redirectUrl);
       } catch (error) {
-        router.push('/dashboard');
+        router.push('/');
       }
     }
   }, [router]);
@@ -53,7 +53,7 @@ export default function SignInForm() {
 
       if (result.success) {
         // Use the redirect_url from the login response for role-based redirection
-        const redirectUrl = result.redirect_url || '/dashboard';
+        const redirectUrl = result.redirect_url || '/';
         // Force a page reload to ensure all app components recognize the authentication
         window.location.href = redirectUrl;
       } else {

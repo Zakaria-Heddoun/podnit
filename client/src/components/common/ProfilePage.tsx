@@ -10,7 +10,6 @@ interface ProfileFormData {
   phone?: string;
   brand_name?: string;
   cin?: string;
-  account_holder?: string;
   bank_name?: string;
   rib?: string;
   bio?: string;
@@ -25,7 +24,6 @@ export default function ProfilePage() {
     phone: '',
     brand_name: '',
     cin: '',
-    account_holder: '',
     bank_name: '',
     rib: '',
     bio: ''
@@ -48,7 +46,6 @@ export default function ProfilePage() {
         phone: user.phone || '',
         brand_name: user.brand_name || '',
         cin: user.cin || '',
-        account_holder: user.account_holder || '',
         bank_name: user.bank_name || '',
         rib: user.rib || '',
         bio: '' // We can add this to the user model later if needed
@@ -97,7 +94,7 @@ export default function ProfilePage() {
     setLoading(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const endpoint = user?.role === 'admin' ? '/api/user' : '/api/seller/profile';
 
       const submitData = new FormData();
@@ -152,7 +149,7 @@ export default function ProfilePage() {
     setLoading(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
 
       const response = await fetch(`${API_URL}/api/user/password`, {
         method: 'PUT',

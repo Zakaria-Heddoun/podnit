@@ -36,7 +36,7 @@ export default function EmployeeProductsPage() {
     setError(null);
     
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       // Fetch only active products for employees - explicitly filter by is_active=true
       const url = `${API_URL}/api/admin/products?per_page=100&status=active`;
       const response = await fetch(url, {
@@ -207,7 +207,7 @@ export default function EmployeeProductsPage() {
                     {product.image_url ? (
                       <img 
                         src={product.image_url.startsWith('/') 
-                          ? `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}${product.image_url}`
+                          ? `${''}${product.image_url}`
                           : product.image_url
                         }
                         alt={product.name}

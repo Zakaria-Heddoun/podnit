@@ -71,7 +71,7 @@ const WithdrawalModal: React.FC<WithdrawalModalProps> = ({ isOpen, onClose, onSu
     setLoading(true);
     
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       
       const response = await fetch(`${API_URL}/api/seller/withdrawals`, {
         method: 'POST',

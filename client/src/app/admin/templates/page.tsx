@@ -97,7 +97,7 @@ export default function AdminTemplates() {
     setIsProcessing(true);
 
     try {
-      const url = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/admin/templates/${id}/approve`;
+      const url = `${''}/api/admin/templates/${id}/approve`;
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
@@ -138,6 +138,7 @@ export default function AdminTemplates() {
   };
 
   const resolveThumbnail = (template: Template) => {
+    // Prefer thumbnail_image (composite of design on product mockup when backend generates it)
     const parsed = parseDesignConfig(template.design_config);
     const firstImage = parsed?.images ? (Object.values(parsed.images).find(Boolean) as string | undefined) : undefined;
     return getImageUrl(template.thumbnail_image || firstImage || null);
@@ -148,7 +149,7 @@ export default function AdminTemplates() {
     setIsProcessing(true);
 
     try {
-      const url = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/admin/templates/${selectedTemplateId}/reject`;
+      const url = `${''}/api/admin/templates/${selectedTemplateId}/reject`;
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
@@ -188,7 +189,7 @@ export default function AdminTemplates() {
     setIsProcessing(true);
 
     try {
-      const url = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/admin/templates/${id}`;
+      const url = `${''}/api/admin/templates/${id}`;
       const response = await fetch(url, {
         method: 'DELETE',
         headers: {
@@ -342,6 +343,7 @@ export default function AdminTemplates() {
                             <img
                               src={thumbUrl}
                               alt={template.title}
+                              title="Design on product mockup"
                               className="w-12 h-12 rounded object-cover border border-gray-200 dark:border-gray-700"
                             />
                           ) : (

@@ -140,13 +140,15 @@ class DepositController extends Controller
             'CIH' => [
                 'bank_name' => 'Crédit Immobilier et Hôtelier (CIH)',
                 'rib' => '230 787 3523462211027000 95',
-                'account_holder' => 'PODNIT SARL',
+                'first_name' => 'PODNIT',
+                'last_name' => 'SARL',
                 'swift' => 'CIHMMAMC'
             ],
             'ATTIJARI' => [
                 'bank_name' => 'Attijariwafa Bank',
                 'rib' => '007 787 0008795300400440 60',
-                'account_holder' => 'PODNIT SARL',
+                'first_name' => 'PODNIT',
+                'last_name' => 'SARL',
                 'swift' => 'BCMAMAMC'
             ]
         ];

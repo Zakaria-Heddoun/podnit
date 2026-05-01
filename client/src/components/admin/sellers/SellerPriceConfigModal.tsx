@@ -35,7 +35,7 @@ export default function SellerPriceConfigModal({ isOpen, onClose, seller }: Sell
     const fetchData = async () => {
         setLoading(true);
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+            const API_URL = "";
 
             // Fetch all products
             const productsRes = await fetch(`${API_URL}/api/admin/products?per_page=100`, {
@@ -77,7 +77,7 @@ export default function SellerPriceConfigModal({ isOpen, onClose, seller }: Sell
     const handleSave = async () => {
         setSaving(true);
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+            const API_URL = "";
             const payload = {
                 products: Object.entries(prices).map(([productId, price]) => ({
                     product_id: parseInt(productId),

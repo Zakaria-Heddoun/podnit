@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { getApiUrl } from "@/lib/utils";
 import Switch from "@/components/form/switch/Switch";
 
 type Mode = "create" | "edit";
@@ -54,6 +56,7 @@ interface ProductFormProps {
 
 export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => {
   const router = useRouter();
+  const { toast } = useToast();
   const { token } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
@@ -83,7 +86,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => 
       if (!productId || mode === "create" || !token) return;
       setIsFetching(true);
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+        const API_URL = getApiUrl();
         const response = await fetch(`${API_URL}/api/admin/products/${productId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -261,14 +264,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!token) {
+      toast({ title: "Error", description: "You must be signed in to save a product." });
+      return;
+    }
     if (formData.available_colors.length === 0) {
       setColorError("Add at least one color.");
       return;
     }
     setIsLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+      const API_URL = getApiUrl();
       const formDataToSend = new FormData();
       formDataToSend.append("name", formData.name);
       formDataToSend.append("base_price", formData.price);
@@ -325,14 +331,23 @@ export const ProductForm: React.FC<ProductFormProps> = ({ mode, productId }) => 
       });
 
       if (!response.ok) {
-        const err = await response.text();
-        console.error("Failed to save product", err);
+        let message = "Failed to save product.";
+        const text = await response.text();
+        try {
+          const data = JSON.parse(text);
+          message = data.message || (data.errors ? JSON.stringify(data.errors) : message);
+        } catch {
+          if (text) message = text;
+        }
+        toast({ title: "Error", description: message });
         return;
       }
 
+      toast({ title: "Success", description: mode === "create" ? "Product created." : "Product updated." });
       router.push("/admin/products");
-    } catch (err) {
-      console.error("Failed to save product", err);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save product.";
+      toast({ title: "Error", description: message });
     } finally {
       setIsLoading(false);
     }

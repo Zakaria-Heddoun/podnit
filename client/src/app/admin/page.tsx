@@ -27,7 +27,7 @@ type Template = {
 type Product = { id: number; name: string; base_price?: number };
 
 export default function AdminDashboard() {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+  const API_URL = "";
 
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);

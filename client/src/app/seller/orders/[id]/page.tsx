@@ -83,6 +83,7 @@ interface OrderDetail {
     customer_phone?: string;
     tracking_number?: string;
     allow_reshipping?: boolean;
+    is_paid?: boolean;
 }
 
 export default function SellerOrderDetailPage() {
@@ -93,6 +94,7 @@ export default function SellerOrderDetailPage() {
 
     const [order, setOrder] = useState<OrderDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const [returnLoading, setReturnLoading] = useState(false);
 
     // Re-rendered design images per group (same fix as Admin Review Template)
     const [renderedImages, setRenderedImages] = useState<Record<string, Record<string, string>>>({});
@@ -157,7 +159,7 @@ export default function SellerOrderDetailPage() {
                 savedDimensions?: { width: number; height: number } | null;
             }[] = [];
             const assets: { url: string; type: string }[] = [];
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            const API_URL = '';
 
             // 1. Process Mockups with design compositing (same fix as Admin Review Template)
             if (group.designConfig) {
@@ -276,7 +278,7 @@ export default function SellerOrderDetailPage() {
         const renderAll = async () => {
             setRenderingImages(true);
             const results: Record<string, Record<string, string>> = {};
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            const API_URL = '';
             const token = localStorage.getItem('token');
 
             for (const group of groupsWithTemplates) {
@@ -334,7 +336,7 @@ export default function SellerOrderDetailPage() {
 
     const fetchOrderDetails = async () => {
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            const API_URL = '';
             const token = localStorage.getItem('token');
 
             const response = await fetch(`${API_URL}/api/seller/orders/${orderId}`, {
@@ -367,11 +369,39 @@ export default function SellerOrderDetailPage() {
 
     const getStatusColor = getOrderStatusBadgeColor;
 
+    const handleMarkAsReturned = async () => {
+        if (!order) return;
+        if (!window.confirm(`Mark order ${order.order_number} as RETURNED?`)) return;
+        setReturnLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`/api/seller/orders/${order.id}/mark-returned`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                toast.success('Order marked as returned');
+                setOrder(prev => prev ? { ...prev, status: 'RETURNED' } : null);
+            } else {
+                toast.error(result.error || 'Failed to mark as returned');
+            }
+        } catch {
+            toast.error('An error occurred');
+        } finally {
+            setReturnLoading(false);
+        }
+    };
+
     const handleToggleReshipping = async () => {
         if (!isAdmin) return;
 
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+            const API_URL = '';
             const token = localStorage.getItem('token');
 
             const response = await fetch(`${API_URL}/api/admin/orders/${orderId}/toggle-reshipping`, {
@@ -442,9 +472,21 @@ export default function SellerOrderDetailPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <Badge color={order.is_paid ? 'success' : 'error'}>
+                        {order.is_paid ? 'PAID' : 'UNPAID'}
+                    </Badge>
                     <Badge color={getStatusColor(order.status)}>
                         {order.status}
                     </Badge>
+                    {order.status !== 'RETURNED' && order.status !== 'CANCELLED' && (
+                        <Button
+                            onClick={handleMarkAsReturned}
+                            disabled={returnLoading}
+                            className="bg-orange-600 hover:bg-orange-700 text-white"
+                        >
+                            {returnLoading ? 'Processing...' : 'Mark as Returned'}
+                        </Button>
+                    )}
                     <Button onClick={() => router.push('/seller/orders')} variant="outline">
                         Back to Orders
                     </Button>

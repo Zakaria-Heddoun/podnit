@@ -34,7 +34,7 @@ export default function TemplateReviewPage() {
         setIsLoading(true);
         try {
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/admin/templates/${templateId}?include=product`,
+                `${''}/api/admin/templates/${templateId}?include=product`,
                 {
                     headers: {
                         'Accept': 'application/json',
@@ -160,7 +160,7 @@ export default function TemplateReviewPage() {
                 // Fallback: try to download the pre-exported image from the server
                 if (view.fallbackImageUrl) {
                     try {
-                        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+                        const API_URL = '';
                         const downloadUrl = `${API_URL}/api/admin/templates/${templateId}/download/${view.key}`;
                         const token = localStorage.getItem('token');
                         const res = await fetch(downloadUrl, {
@@ -195,7 +195,7 @@ export default function TemplateReviewPage() {
         setIsProcessing(true);
         try {
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/admin/templates/${templateId}/approve`,
+                `${''}/api/admin/templates/${templateId}/approve`,
                 {
                     method: 'PUT',
                     headers: {
@@ -223,7 +223,7 @@ export default function TemplateReviewPage() {
         setIsProcessing(true);
         try {
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/admin/templates/${templateId}/reject`,
+                `${''}/api/admin/templates/${templateId}/reject`,
                 {
                     method: 'PUT',
                     headers: {

@@ -19,7 +19,7 @@ export default function ForgotPasswordForm() {
     setLoading(true);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const response = await fetch(`${API_URL}/api/forgot-password`, {
         method: 'POST',
         headers: {

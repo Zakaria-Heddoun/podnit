@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use App\Services\EliteSpeedService;
+use App\Services\OzonService;
 
 class OrderController extends Controller
 {
@@ -179,14 +179,14 @@ class OrderController extends Controller
     /**
      * Create a new order from a product (simple order)
      */
-    public function createFromProduct(Request $request, EliteSpeedService $shippingService): JsonResponse
+    public function createFromProduct(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'product_id' => 'nullable|exists:products,id', // Made optional - can be per-item
             'customer_name' => 'required|string|max:255',
             'customer_email' => 'nullable|email|max:255',
             'customer_phone' => 'required|string|max:20',
-            'total_price' => 'required|numeric|min:0', // Total COD price for EliteSpeed
+            'total_price' => 'required|numeric|min:0', // Total COD amount collected on delivery
             'quantity' => 'required|integer|min:1',
             'selling_price' => 'required|numeric|min:0',
             'items' => 'required|array|min:1',
@@ -266,6 +266,12 @@ class OrderController extends Controller
                     ], 422);
                 }
                 
+                if (!$originalOrder->allow_reshipping) {
+                    return response()->json([
+                        'error' => "Reshipping not allowed for item #" . ($index + 1)
+                    ], 422);
+                }
+
                 if ($originalOrder->is_reordered) {
                     return response()->json([
                         'error' => "This return has already been reordered for item #" . ($index + 1)
@@ -369,7 +375,7 @@ class OrderController extends Controller
                     'quantity' => $request->quantity,
                     'unit_price' => $totalProductCost / $request->quantity, // Average unit price
                     'selling_price' => $sellingPrice, // What seller charges customer
-                    'total_amount' => $request->total_price, // Use total_price from frontend (for EliteSpeed COD)
+                    'total_amount' => $request->total_price,
                     'status' => 'PENDING',
                     'shipping_address' => $request->shipping_address,
                     'is_reordered' => false,
@@ -430,14 +436,14 @@ class OrderController extends Controller
     /**
      * Create an order from a template
      */
-    public function createFromTemplate(Request $request, EliteSpeedService $shippingService): JsonResponse
+    public function createFromTemplate(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'template_id' => 'nullable|exists:templates,id', // Made optional - can be per-item
             'customer_name' => 'required|string|max:255',
             'customer_email' => 'nullable|email|max:255',
             'customer_phone' => 'required|string|max:20',
-            'total_price' => 'required|numeric|min:0', // Total COD price for EliteSpeed
+            'total_price' => 'required|numeric|min:0', // Total COD amount collected on delivery
             'quantity' => 'required|integer|min:1',
             'items' => 'required|array|min:1',
             'items.*.template_id' => 'nullable|exists:templates,id', // Allow per-item template
@@ -515,9 +521,10 @@ class OrderController extends Controller
                 ], 422);
             }
             
-            if ($itemTemplate->colors && is_array($itemTemplate->colors) && !in_array($item['color'], $itemTemplate->colors)) {
+            $productColors = $itemTemplate->product->available_colors ?? [];
+            if (is_array($productColors) && !empty($productColors) && !in_array($item['color'], $productColors)) {
                 return response()->json([
-                    'error' => "Invalid color selection for item #" . ($index + 1) . " in this template"
+                    'error' => "Invalid color selection for item #" . ($index + 1) . " for this product"
                 ], 422);
             }
 
@@ -566,6 +573,11 @@ class OrderController extends Controller
                  if (!$originalOrder || $originalOrder->user_id !== $user->id) {
                      return response()->json([
                         'error' => "Invalid reorder source for item #" . ($index + 1)
+                    ], 422);
+                 }
+                 if (!$originalOrder->allow_reshipping) {
+                     return response()->json([
+                        'error' => "Reshipping not allowed for item #" . ($index + 1)
                     ], 422);
                  }
                  if ($originalOrder->is_reordered) {
@@ -664,7 +676,7 @@ class OrderController extends Controller
                 ],
                 'quantity' => $request->quantity,
                 'unit_price' => $totalProductCost / $request->quantity, // Average unit price
-                'total_amount' => $request->total_price, // Use total_price from frontend (for EliteSpeed COD)
+                'total_amount' => $request->total_price,
                 'status' => 'PENDING',
                 'customer_name' => $request->customer_name,
                 'customer_email' => $request->customer_email,
@@ -757,15 +769,7 @@ class OrderController extends Controller
         $oldStatus = $order->status;
         $newStatus = $request->status;
 
-        // Update order status
-        $order->update([
-            'status' => $newStatus
-        ]);
-
-        // Automatically restrict reshipping if status is a return status
-        if ($order->isReturnStatus()) {
-            $order->update(['allow_reshipping' => false]);
-        }
+        $order->update(['status' => $newStatus]);
 
         $order->load(['product', 'template', 'customer']);
 
@@ -925,15 +929,14 @@ class OrderController extends Controller
     }
 
     /**
-     * Ship order via EliteSpeed
+     * Ship order via OZON Express (creates a Bon de Livraison)
      */
-    public function shipOrder(Request $request, Order $order, EliteSpeedService $shippingService): JsonResponse
+    public function shipOrder(Request $request, Order $order, OzonService $shippingService): JsonResponse
     {
         $user = auth()->user();
 
-        // Check permission: admin has full access, employees need manage_orders permission, sellers need to own the order
         if (!$user->isAdmin() && !$user->hasPermission('manage_orders') && $order->user_id !== $user->id) {
-             return response()->json(['error' => 'Unauthorized'], 403);
+            return response()->json(['error' => 'Unauthorized'], 403);
         }
 
         if ($order->tracking_number && !$user->isAdmin() && !$user->hasPermission('manage_orders')) {
@@ -949,81 +952,73 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Order shipped successfully',
-                'data' => $result
+                'data' => $result,
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
-                'error' => 'Shipping failed',
-                'message' => $e->getMessage()
+                'error'   => 'Shipping failed',
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
 
     /**
-     * Track order status via EliteSpeed
+     * Return OZON delivery note PDF links for a shipped order.
+     * Tracking is managed directly on the OZON portal.
      */
-    public function trackOrder(Order $order, EliteSpeedService $shippingService): JsonResponse
+    public function trackOrder(Order $order, OzonService $shippingService): JsonResponse
     {
         if (!$order->tracking_number) {
-            return response()->json(['error' => 'No tracking number found'], 404);
+            return response()->json(['error' => 'No tracking / BL reference found for this order'], 404);
         }
 
-        try {
-            $tracking = $shippingService->trackParcel($order->tracking_number);
-            
-            // Sync status to database
-            if ($tracking) {
-                // Extract status from different possible response formats
-                $externalStatus = null;
-                
-                if (isset($tracking['statut'])) {
-                    $externalStatus = $tracking['statut'];
-                } elseif (isset($tracking['last_status'])) {
-                    $externalStatus = $tracking['last_status'];
-                } elseif (isset($tracking['message'])) {
-                    $externalStatus = $tracking['message'];
-                } elseif (isset($tracking['data']) && is_array($tracking['data']) && !empty($tracking['data'])) {
-                    $latestEvent = $tracking['data'][0];
-                    $externalStatus = $latestEvent['status'] ?? null;
-                }
-                
-                if ($externalStatus) {
-                    $oldStatus = $order->status;
-                    
-                    // Update BOTH status and shipping_status with the raw delivery status
-                    $order->status = $externalStatus;
-                    $order->shipping_status = $externalStatus;
-                    
-                    // Check if it's a return status and restrict reshipping
-                    if ($order->isReturnStatus()) {
-                        $order->allow_reshipping = false;
-                    }
-                    
-                    // Credit seller when order transitions to delivered ("Livré")
-                    if ($this->isDeliveredStatus($externalStatus) && !$this->isDeliveredStatus($oldStatus)) {
-                        $this->creditSellerForDeliveredOrder($order);
-                    }
-                    
-                    $order->save();
-                    
-                    \Log::info("Order status synced via track", [
-                        'order_number' => $order->order_number,
-                        'old_status' => $oldStatus,
-                        'new_status' => $externalStatus
-                    ]);
-                }
-            }
-            
-            $order->load(['product', 'template', 'customer']);
-            
-            return response()->json([
-                'data' => $tracking,
-                'order' => $order
-            ]);
-        } catch (\Exception $e) {
-             return response()->json(['error' => 'Failed to track parcel: ' . $e->getMessage()], 500);
+        $pdfUrls = $shippingService->getPdfUrls($order->tracking_number);
+        $order->load(['product', 'template', 'customer']);
+
+        return response()->json([
+            'bl_ref'   => $order->tracking_number,
+            'pdf_urls' => $pdfUrls,
+            'order'    => $order,
+        ]);
+    }
+
+    /**
+     * Mark an order as returned manually (admin / employee only).
+     */
+    public function markAsReturned(Request $request, Order $order): JsonResponse
+    {
+        $user = auth()->user();
+
+        // Admin and employees with manage_orders can mark any order.
+        // Sellers can only mark their own orders.
+        $isSeller = !$user->isAdmin() && !$user->hasPermission('manage_orders');
+        if ($isSeller && $order->user_id !== $user->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
         }
+
+        $request->validate([
+            'return_notes' => 'nullable|string|max:500',
+        ]);
+
+        $order->update([
+            'status'       => 'RETURNED',
+            'returned_by'  => $user->id,
+            'returned_at'  => now(),
+            'return_notes' => $request->input('return_notes'),
+        ]);
+
+        Log::info('Order manually marked as returned', [
+            'order_number' => $order->order_number,
+            'by_user'      => $user->id,
+            'by_email'     => $user->email,
+        ]);
+
+        $order->load(['product', 'template', 'customer']);
+
+        return response()->json([
+            'message' => 'Order marked as returned',
+            'data'    => $order,
+        ]);
     }
     
     /**
@@ -1165,63 +1160,38 @@ class OrderController extends Controller
         }
     }
 
-    private function automateShipping(Order $order, EliteSpeedService $shippingService, ?string $note = ''): array
+    private function automateShipping(Order $order, OzonService $shippingService, ?string $note = ''): array
     {
-        // Map City/Address
-        $city = $order->shipping_address['city'] ?? 'Unknown';
-        $address = $order->shipping_address['street'] ?? 'Unknown';
-        
-        // Format Product string - Handle multiple items
-        $productItems = [];
-        if ($order->customization && isset($order->customization['items'])) {
-            foreach ($order->customization['items'] as $item) {
-                $qty = $item['quantity'] ?? 1;
-                $size = $item['size'] ?? '';
-                $color = $item['color'] ?? '';
-                
-                // Try to find product name
-                $pName = 'Product';
-                if (isset($item['product_id'])) {
-                    $prod = Product::find($item['product_id']);
-                    $pName = $prod ? $prod->name : 'Product';
-                }
-                
-                $productItems[] = "{$qty}x {$pName} ({$size} {$color})";
-            }
-        }
-        
-        $productString = !empty($productItems) ? implode(', ', $productItems) : ($order->product ? $order->product->name : 'Custom Order');
-        
-        $payload = [
-            'fullname' => $order->customer_name ?? ($order->customer ? $order->customer->name : 'Guest'),
-            'phone' => $this->sanitizePhoneNumber($order->customer_phone ?? ($order->customer ? $order->customer->phone : '')),
-            'city' => $city,
-            'address' => $address,
-            'price' => $order->total_amount, // Use total_amount (set via total_price from frontend)
-            'product' => substr($productString, 0, 255), // Limit length
-            'qty' => $order->quantity,
-            'note' => $note ?? '',
-            'change' => 0,
-            'openpackage' => 1,
-            'internal_id' => $order->order_number,
+        $order->loadMissing('customer');
+
+        $customer = $order->customer;
+        $addr     = $order->shipping_address ?? [];
+
+        $blRef = $shippingService->shipParcel(
+            receiver: $customer?->name    ?? 'N/A',
+            phone:    $customer?->phone   ?? '',
+            address:  $addr['street']     ?? '',
+            cityName: $addr['city']       ?? 'Casablanca',
+            price:    (float) $order->total_amount,
+            orderRef: $order->order_number,
+            note:     $note ?: null,
+        );
+
+        $order->update([
+            'status'          => 'PRINTED',
+            'tracking_number' => $blRef,
+        ]);
+
+        Log::info('OZON: Order shipped', [
+            'order_number' => $order->order_number,
+            'bl_ref'       => $blRef,
+            'note'         => $note,
+        ]);
+
+        return [
+            'bl_ref'   => $blRef,
+            'pdf_urls' => $shippingService->getPdfUrls($blRef),
         ];
-
-        // Call Service
-        $result = $shippingService->createParcel($payload);
-
-        // If success
-        if (isset($result['code']) && $result['code'] === 'ok') {
-            $trackingNumber = $result['code_shippment'] ?? $order->order_number;
-            
-            $order->update([
-                'status' => 'PRINTED', 
-                'tracking_number' => $trackingNumber,
-            ]);
-            
-            return $result;
-        }
-
-        throw new \Exception('Shipping API returned unexpected status: ' . json_encode($result));
     }
 
     /**

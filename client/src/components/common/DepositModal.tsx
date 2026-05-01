@@ -14,13 +14,15 @@ interface BankDetails {
   CIH: {
     bank_name: string;
     rib: string;
-    account_holder: string;
+    first_name: string;
+    last_name: string;
     swift: string;
   };
   ATTIJARI: {
     bank_name: string;
     rib: string;
-    account_holder: string;
+    first_name: string;
+    last_name: string;
     swift: string;
   };
 }
@@ -57,7 +59,7 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, onSuccess,
     setLoading(true);
     
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       
       const formData = new FormData();
       formData.append('amount', amount);

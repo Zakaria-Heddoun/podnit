@@ -25,8 +25,8 @@ class TemplateController extends Controller
             $perPage = (int) $request->get('per_page', 25);
             $perPage = max(5, min(100, $perPage)); // clamp between 5 and 100
 
-            $templates = Template::select(['id','title','status','product_id','user_id','thumbnail_image','created_at','calculated_price'])
-                ->with(['user:id,name','product:id,name,base_price,category,available_colors,available_sizes,in_stock,image_url'])
+            $templates = Template::select(['id','title','status','product_id','user_id','thumbnail_image','created_at','calculated_price','admin_feedback'])
+                ->with(['user:id,name,first_name,last_name','product:id,name,base_price,category,available_colors,available_sizes,in_stock,image_url'])
                 ->when($request->status, function ($query, $status) {
                     if ($status !== 'All') {
                         return $query->where('status', strtoupper($status));
@@ -42,7 +42,7 @@ class TemplateController extends Controller
             $perPage = (int) $request->get('per_page', 15);
             $perPage = max(5, min(50, $perPage)); // clamp to [5,50]
 
-            $templates = Template::select(['id','title','status','product_id','user_id','thumbnail_image','created_at','calculated_price'])
+            $templates = Template::select(['id','title','status','product_id','user_id','thumbnail_image','created_at','calculated_price','admin_feedback'])
                 ->with(['product:id,name,base_price,category,available_colors,available_sizes,in_stock,image_url'])
                 ->where('user_id', $user->id)
                 ->when($request->status, function ($query, $status) {
@@ -125,8 +125,7 @@ class TemplateController extends Controller
     {
         $contentLength = $_SERVER['CONTENT_LENGTH'] ?? 0;
 
-        // Reject very large requests early to avoid PHP memory exhaustion when dealing with large base64 blobs
-        $maxContentSize = 20 * 1024 * 1024; // 20MB
+        $maxContentSize = 100 * 1024 * 1024; // 100MB — matches PHP post_max_size
         if (!empty($contentLength) && $contentLength > $maxContentSize) {
             \Log::warning('Template store request too large, rejecting', ['content_length' => $contentLength]);
             return response()->json([
@@ -846,7 +845,8 @@ class TemplateController extends Controller
 
     /**
      * Generate a composite thumbnail for the template's first view (design + mockup).
-     * This ensures the thumbnail looks like the template first view.
+     * Uses design_config view mockup, or falls back to product view mockup so the thumbnail
+     * always shows the seller's design on the product mockup.
      */
     private function generateFirstViewCompositeThumbnail(Template $template, array $designConfig): ?string
     {
@@ -857,10 +857,33 @@ class TemplateController extends Controller
         $views = $designConfig['views'] ?? [];
         $images = $designConfig['images'] ?? [];
 
+        $template->loadMissing('product');
+        $productViews = $template->product?->views ?? [];
+
         foreach ($views as $view) {
             $viewKey = $view['key'] ?? null;
             if (!$viewKey || empty($images[$viewKey])) {
                 continue;
+            }
+
+            $mockupPath = $view['mockup'] ?? null;
+            if (empty($mockupPath) && is_array($productViews)) {
+                foreach ($productViews as $pv) {
+                    if (($pv['key'] ?? null) === $viewKey && !empty($pv['mockup'] ?? null)) {
+                        $mockupPath = $pv['mockup'];
+                        break;
+                    }
+                }
+            }
+
+            $area = $view['area'] ?? null;
+            if (empty($area) && is_array($productViews)) {
+                foreach ($productViews as $pv) {
+                    if (($pv['key'] ?? null) === $viewKey && !empty($pv['area'] ?? null)) {
+                        $area = $pv['area'];
+                        break;
+                    }
+                }
             }
 
             try {
@@ -868,19 +891,20 @@ class TemplateController extends Controller
                     $template->id,
                     $viewKey,
                     $images[$viewKey],
-                    $view['mockup'] ?? null,
-                    $view['area'] ?? null,
+                    $mockupPath,
+                    $area,
                     $designConfig['color'] ?? '#ffffff'
                 );
 
-                return $compositeUrl;
+                if ($compositeUrl) {
+                    return $compositeUrl;
+                }
             } catch (\Exception $e) {
                 \Log::warning('Failed to generate first-view composite thumbnail', [
                     'template_id' => $template->id,
                     'view_key' => $viewKey,
                     'error' => $e->getMessage()
                 ]);
-                return null;
             }
         }
 

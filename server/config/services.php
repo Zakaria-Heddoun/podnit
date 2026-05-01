@@ -35,9 +35,10 @@ return [
         ],
     ],
 
-    'elitespeed' => [
-        'token' => env('ELITESPEED_API_TOKEN'),
-        'webhook_token' => env('ELITESPEED_WEBHOOK_TOKEN'), // Optional: for webhook verification
+    // OZON Express delivery integration
+    'ozon' => [
+        'customer_id' => env('OZON_CUSTOMER_ID'),
+        'api_key'     => env('OZON_API_KEY'),
     ],
 
 ];

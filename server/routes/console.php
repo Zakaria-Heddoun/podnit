@@ -11,5 +11,6 @@ Artisan::command('inspire', function () {
 // Schedule the deletion of inactive sellers to run daily at midnight
 Schedule::command('sellers:delete-inactive')->daily();
 
-// Sync order statuses from EliteSpeed every 10 minutes
+// Report active shipped orders (OZON status is managed via the OZON portal)
 Schedule::command('orders:sync-statuses')->cron('*/10 * * * *');
+Schedule::command('orders:credit-delivered')->dailyAt('00:00');

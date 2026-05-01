@@ -5,7 +5,7 @@ export interface DataTableColumn<T> {
   key: keyof T;
   label: string;
   sortable?: boolean;
-  render?: (value: any, row: T) => React.ReactNode;
+  render?: (value: unknown, row: T) => React.ReactNode;
   width?: string;
   align?: 'left' | 'center' | 'right';
 }
@@ -44,7 +44,7 @@ export interface PaginationInfo {
 export interface DataTableFilter {
   column: string;
   operator: 'equals' | 'contains' | 'startsWith' | 'endsWith' | 'greaterThan' | 'lessThan';
-  value: any;
+  value: unknown;
 }
 
 // Sort configuration interface
@@ -128,6 +128,7 @@ export interface Order {
   date: string;
   trackingNumber?: string;
   paymentMethod?: string;
+  isPaid?: boolean;
 }
 
 export interface Customer {
@@ -162,7 +163,7 @@ export interface Return {
   status: string;
   date: string;
   reason?: string;
-  customization?: any;
+  customization?: unknown;
   allow_reshipping?: boolean;
 }
 

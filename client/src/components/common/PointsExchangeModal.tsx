@@ -58,7 +58,7 @@ const PointsExchangeModal: React.FC<PointsExchangeModalProps> = ({
     setLoading(true);
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com'}/api/seller/points/exchange`, {
+      const response = await fetch(`${''}/api/seller/points/exchange`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -46,7 +46,7 @@ export default function SellerReturns() {
     if (!user) return;
     setLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+      const API_URL = '';
       const token = localStorage.getItem('token');
 
       const response = await fetch(`${API_URL}/api/seller/orders?filter=returns&per_page=100`, {

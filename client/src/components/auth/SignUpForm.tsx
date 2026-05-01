@@ -5,9 +5,14 @@ import Label from "@/components/form/Label";
 import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+function getDefaultApiUrl() {
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+    return "http://localhost:8000";
+  }
+  return "https://api.podnit.com";
+}
 
 export default function SignUpForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -25,8 +30,17 @@ export default function SignUpForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || getDefaultApiUrl(), []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -57,7 +71,7 @@ export default function SignUpForm() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/signup`, {
+      const response = await fetch(`${apiUrl}/api/signup`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -74,17 +88,32 @@ export default function SignUpForm() {
         // Registration successful, redirect to signin
         router.push('/signin?message=Registration successful! Please sign in.');
       } else {
-        // Handle validation errors
-        const data = await response.json();
-        if (data.errors) {
-          const errorMessages = Object.values(data.errors).flat();
-          setError(errorMessages.join(', '));
-        } else {
-          setError(data.message || 'Registration failed');
+        const contentType = response.headers.get("content-type") || "";
+        const responseText = await response.text();
+
+        if (contentType.includes("application/json")) {
+          const data = responseText ? JSON.parse(responseText) : null;
+          if (data?.errors) {
+            const errorMessages = Object.values(data.errors).flat();
+            setError(errorMessages.join(", "));
+            return;
+          }
+          if (data?.message) {
+            setError(data.message);
+            return;
+          }
         }
+
+        if (responseText) {
+          setError(`Request failed (${response.status}). ${responseText.slice(0, 300)}`);
+          return;
+        }
+
+        setError(`Request failed (${response.status}).`);
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      const message = err instanceof Error ? err.message : String(err);
+      setError(`An unexpected error occurred. ${message}`);
     } finally {
       setLoading(false);
     }
@@ -190,7 +219,7 @@ export default function SignUpForm() {
                     id="bank_name"
                     name="bank_name"
                     value={formData.bank_name}
-                    onChange={handleInputChange}
+                    onChange={handleSelectChange}
                     className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
                     required
                   >

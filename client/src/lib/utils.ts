@@ -1,4 +1,4 @@
-import { clsx, type ClassValue } from "clsx";
+import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
@@ -6,12 +6,20 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getApiUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL || 'https://api.podnit.com';
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // Use relative paths so requests go through the Next.js proxy
+  return '';
 }
 
-export function getImageUrl(path?: string | null): string {
-  if (!path) return '/images/placeholder-product.png';
-  if (path.startsWith('http') || path.startsWith('data:') || path.startsWith('blob:')) return path;
+export function getImageUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  
   const apiUrl = getApiUrl();
-  return `${apiUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  
+  return `${apiUrl}${cleanPath}`;
 }

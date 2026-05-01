@@ -29,7 +29,7 @@ export default function AdminProductsPage() {
 
       try {
         setIsLoading(true);
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+        const API_URL = "";
         const response = await fetch(`${API_URL}/api/admin/products?per_page=100`, {
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -40,7 +40,7 @@ export default function AdminProductsPage() {
 
         if (response.ok) {
           const data = await response.json();
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+          const API_URL = "";
           // Map API data to ProductDataItem interface
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const mappedProducts: ProductDataItem[] = data.data.map((item: any) => {
@@ -86,7 +86,7 @@ export default function AdminProductsPage() {
     ));
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+      const API_URL = "";
       const response = await fetch(`${API_URL}/api/admin/products/${id}/toggle-status`, {
         method: "PUT",
         headers: {
@@ -123,7 +123,7 @@ export default function AdminProductsPage() {
     ));
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.podnit.com";
+      const API_URL = "";
       const response = await fetch(`${API_URL}/api/admin/products/${id}/toggle-stock`, {
         method: "PUT",
         headers: {
