@@ -83,7 +83,6 @@ class OzonService
         int     $cityId,
         float   $price,
         int     $stock = 0,
-        ?string $orderRef = null,
         ?string $note = null
     ): string {
         // OZON requires local Moroccan format (0XXXXXXXXX), not +212XXXXXXXXX
@@ -98,9 +97,6 @@ class OzonService
             'parcel-stock'    => $stock,
         ];
 
-        if ($orderRef !== null) {
-            $payload['tracking-number'] = $orderRef;
-        }
         if ($note !== null) {
             $payload['parcel-note'] = $note;
         }
@@ -117,10 +113,17 @@ class OzonService
         }
 
         $data     = $response->json();
-        $ozonCode = $data['TRACKING-NUMBER'] ?? null;
+        $addParcel = $data['ADD-PARCEL'] ?? [];
+
+        if (($addParcel['RESULT'] ?? '') !== 'SUCCESS') {
+            $msg = $addParcel['MESSAGE'] ?? 'Unknown error';
+            throw new \Exception('OZON: Parcel creation failed: ' . $msg);
+        }
+
+        $ozonCode = $addParcel['NEW-PARCEL']['TRACKING-NUMBER'] ?? null;
 
         if (!$ozonCode) {
-            throw new \Exception('OZON: Parcel registered but no TRACKING-NUMBER in response: ' . $response->body());
+            throw new \Exception('OZON: Parcel created but TRACKING-NUMBER missing in response: ' . $response->body());
         }
 
         Log::info('OZON: Parcel created', ['ozon_code' => $ozonCode]);
@@ -212,7 +215,6 @@ class OzonService
         string  $address,
         string  $cityName,
         float   $price,
-        ?string $orderRef = null,
         ?string $note = null
     ): string {
         $cityId = $this->resolveCityId($cityName);
@@ -224,7 +226,6 @@ class OzonService
             cityId:   $cityId,
             price:    $price,
             stock:    0,
-            orderRef: $orderRef,
             note:     $note ?: null,
         );
 

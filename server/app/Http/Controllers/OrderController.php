@@ -1173,7 +1173,6 @@ class OrderController extends Controller
             address:  $addr['street']     ?? '',
             cityName: $addr['city']       ?? 'Casablanca',
             price:    (float) $order->total_amount,
-            orderRef: $order->order_number,
             note:     $note ?: null,
         );
 
