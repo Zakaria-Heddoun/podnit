@@ -39,3 +39,6 @@ next-env.d.ts
 
 # local artifacts (permission issues)
 /lrt
+.next.bak/
+error_log
+let
